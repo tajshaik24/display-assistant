@@ -1,7 +1,7 @@
 import AppIntents
 
 // Actions for Siri, Shortcuts and Spotlight. They run inside the app (launching it in the
-// background if needed) and apply to every controllable display, like the Control Center controls.
+// background if needed) and act on the DDC monitors, like the Control Center controls.
 
 enum DisplayIntentError: Error, CustomLocalizedStringResourceConvertible {
     case noDisplay(DisplayModel.Control)
@@ -18,7 +18,7 @@ enum DisplayIntentError: Error, CustomLocalizedStringResourceConvertible {
 private func displays(supporting control: DisplayModel.Control) async throws -> [DisplayModel] {
     let store = DisplayStore.shared
     await store.waitUntilLoaded()
-    let displays = store.displays.filter { $0.supports(control) }
+    let displays = store.commandTargets(for: control)
     guard !displays.isEmpty else { throw DisplayIntentError.noDisplay(control) }
     return displays
 }

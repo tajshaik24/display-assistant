@@ -38,12 +38,15 @@ final class KeyboardController: ObservableObject {
     private func target(for key: MediaKey) -> DisplayModel? {
         switch key {
         case .brightnessUp, .brightnessDown:
-            return store.targetDisplay(for: .brightness)
+            let target = store.targetDisplay(for: .brightness)
+            // The key goes to macOS instead; if that moves a native display, synced displays should follow promptly.
+            if target == nil { store.nativeBrightnessMayHaveChanged() }
+            return target
         case .volumeUp, .volumeDown, .mute:
             // Only take the volume keys while sound is actually routed to a display.
             guard let deviceName = AudioOutput.displayDeviceName else { return nil }
             if let named = store.display(named: deviceName), named.supports(.volume) { return named }
-            return store.firstDisplay(supporting: .volume)
+            return store.commandTargets(for: .volume).first
         }
     }
 

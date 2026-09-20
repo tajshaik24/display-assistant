@@ -19,6 +19,11 @@ let package = Package(
             dependencies: ["CIOAVService"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "DisplayKitTests",
+            dependencies: ["DisplayKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "displayctl",
             dependencies: ["DisplayKit"],

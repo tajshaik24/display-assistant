@@ -2,7 +2,7 @@ import AppKit
 import DisplayKit
 import SwiftUI
 
-/// UI-facing state for one external display. Values are normalized to 0...1.
+/// UI-facing state for one display. Values are normalized to 0...1.
 @MainActor
 final class DisplayModel: ObservableObject, Identifiable {
     enum Control: CaseIterable {
@@ -18,6 +18,10 @@ final class DisplayModel: ObservableObject, Identifiable {
 
     let id: CGDirectDisplayID
     let name: String
+    let isBuiltIn: Bool
+    /// True for displays macOS controls itself (built-in, Studio Display, ...). They only offer
+    /// brightness here, and their keys and volume stay with the system.
+    let isNative: Bool
 
     @Published private(set) var values: [Control: Double] = [:]
     @Published private(set) var isMuted = false
@@ -27,11 +31,15 @@ final class DisplayModel: ObservableObject, Identifiable {
     var onMuteChange: ((Bool) -> Void)?
     /// Called each time the display has been queried, whether or not it answered.
     var onLoad: (() -> Void)?
+    /// Called with the old and new brightness when it changes for any reason other than sync
+    /// itself: the user, a command, or (for native displays) macOS.
+    var onBrightnessChange: ((DisplayModel, Double, Double) -> Void)?
 
-    /// False for displays that don't speak DDC (or have it switched off); those are left alone.
+    /// False for displays that answer neither way; those are left alone.
     var isControllable: Bool { !values.isEmpty }
 
-    private let writer: DDCWriter
+    /// Nil for native displays.
+    private let writer: DDCWriter?
     private var maxima: [Control: UInt16] = [:]
     private var supportsMute = false
 
@@ -39,15 +47,28 @@ final class DisplayModel: ObservableObject, Identifiable {
     private static let loadAttempts = 4
     private static let loadRetryDelay: Duration = .seconds(3)
 
+    /// Smallest native brightness movement treated as a real change rather than rounding.
+    private static let nativeChangeThreshold = 0.015
+
     // DDC mute values per the MCCS spec.
     private static let muteOn: UInt16 = 1
     private static let muteOff: UInt16 = 2
 
-    init(display: ExternalDisplay) {
+    init(display: ControllableDisplay) {
         id = display.id
         name = display.name
-        writer = DDCWriter(ddc: display.ddc, label: "DisplayAssistant.ddc.\(display.id)")
-        load()
+        isBuiltIn = display.isBuiltIn
+        switch display.backend {
+        case .ddc(let channel):
+            isNative = false
+            writer = DDCWriter(ddc: channel, label: "DisplayAssistant.ddc.\(display.id)")
+            loadDDC()
+        case .native:
+            isNative = true
+            writer = nil
+            values[.brightness] = NativeBrightness.get(display.id)
+            isLoaded = true
+        }
     }
 
     var screen: NSScreen? {
@@ -60,16 +81,17 @@ final class DisplayModel: ObservableObject, Identifiable {
 
     func value(_ control: Control) -> Double { values[control] ?? 0 }
 
-    func set(_ control: Control, to newValue: Double) {
-        guard let max = maxima[control] else { return }
-        let clamped = min(1, Swift.max(0, newValue))
-        let raw = UInt16((clamped * Double(max)).rounded())
-        let changed = raw != UInt16((value(control) * Double(max)).rounded())
-        values[control] = clamped
-        if changed { writer.set(control.code, to: raw) }
+    /// - Parameter notify: false when sync is applying another display's change, so it doesn't echo back.
+    func set(_ control: Control, to newValue: Double, notify: Bool = true) {
+        guard supports(control) else { return }
+        let old = value(control)
+        let new = min(1, max(0, newValue))
+        values[control] = new
+        write(control, old: old, new: new)
 
         // Like macOS, touching the volume brings sound back.
-        if control == .volume, isMuted, clamped > 0 { setMuted(false) }
+        if control == .volume, isMuted, new > 0 { setMuted(false) }
+        if control == .brightness, notify, new != old { onBrightnessChange?(self, old, new) }
     }
 
     func step(_ control: Control, by delta: Double) {
@@ -77,7 +99,7 @@ final class DisplayModel: ObservableObject, Identifiable {
     }
 
     func setMuted(_ muted: Bool) {
-        guard muted != isMuted, supportsMute || supports(.volume) else { return }
+        guard muted != isMuted, let writer, supportsMute || supports(.volume) else { return }
         isMuted = muted
         if supportsMute {
             writer.set(.mute, to: muted ? Self.muteOn : Self.muteOff)
@@ -88,8 +110,27 @@ final class DisplayModel: ObservableObject, Identifiable {
         onMuteChange?(muted)
     }
 
-    private func load(attempt: Int = 1) {
-        writer.read(Control.allCases.map(\.code) + [.mute]) { [weak self] results in
+    /// Picks up brightness changes made outside the app: auto-brightness, the native keys, Control Center.
+    func refreshNativeBrightness() {
+        guard isNative, let current = NativeBrightness.get(id) else { return }
+        let old = value(.brightness)
+        guard abs(current - old) > Self.nativeChangeThreshold else { return }
+        values[.brightness] = current
+        onBrightnessChange?(self, old, current)
+    }
+
+    private func write(_ control: Control, old: Double, new: Double) {
+        if let writer, let max = maxima[control] {
+            // Only talk to the monitor when its own (coarser) scale actually moves.
+            let raw = UInt16((new * Double(max)).rounded())
+            if raw != UInt16((old * Double(max)).rounded()) { writer.set(control.code, to: raw) }
+        } else if isNative, control == .brightness {
+            NativeBrightness.set(id, to: new)
+        }
+    }
+
+    private func loadDDC(attempt: Int = 1) {
+        writer?.read(Control.allCases.map(\.code) + [.mute]) { [weak self] results in
             DispatchQueue.main.async {
                 guard let self else { return }
                 for control in Control.allCases {
@@ -107,7 +148,7 @@ final class DisplayModel: ObservableObject, Identifiable {
                 if !self.isControllable, attempt < Self.loadAttempts {
                     Task { [weak self] in
                         try? await Task.sleep(for: Self.loadRetryDelay)
-                        self?.load(attempt: attempt + 1)
+                        self?.loadDDC(attempt: attempt + 1)
                     }
                 }
             }

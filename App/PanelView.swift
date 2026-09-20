@@ -13,6 +13,9 @@ struct PanelView: View {
             } else {
                 ForEach(store.displays) { DisplayCard(display: $0) }
             }
+            if store.canSync {
+                SyncToggle(isOn: $store.isSyncEnabled)
+            }
             if !keyboard.isActive {
                 KeyboardAccessBanner { keyboard.requestAccess() }
             }
@@ -29,7 +32,7 @@ private struct DisplayCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Image(systemName: "display")
+                Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 26)
@@ -72,6 +75,33 @@ private struct DisplayCard: View {
         let size = screen.frame.size
         let hertz = screen.maximumFramesPerSecond
         return "\(Int(size.width)) × \(Int(size.height)) · \(hertz) Hz"
+    }
+}
+
+private struct SyncToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Sync Brightness").font(.system(size: 13, weight: .semibold))
+                    Text("Displays move together, keeping their current difference")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18))
     }
 }
 

@@ -1,16 +1,20 @@
 # Display Assistant
 
 A menu bar app that controls an external monitor's brightness and volume over DDC/CI,
-for displays macOS can't adjust itself. Built for an LG UltraGear on Apple Silicon.
+for displays macOS can't adjust itself, and keeps its brightness in sync with your Apple displays.
+Built for an LG UltraGear on Apple Silicon.
 
 - Menu bar panel with Control Center style Display and Sound sliders per monitor
+- **Sync Brightness**: all displays move together, so the monitor follows your MacBook's
+  auto-brightness and brightness keys (see [Brightness sync](#brightness-sync))
 - Keyboard brightness, volume and mute keys, with fine steps (see [Keyboard](#keyboard))
 - Control Center / menu bar controls: mute toggle, brightness up/down, volume up/down
 - Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle
 - `displayctl` command-line tool for scripts
 
-Displays that don't answer DDC, Apple's own displays and the built-in display are never shown
-or touched; their keys and controls keep working natively.
+Displays macOS controls itself (the built-in display, Studio Display, Pro Display XDR, LG UltraFine)
+appear in the panel with a brightness slider, but their keys, volume and system controls stay native.
+Displays that can be controlled neither way are never shown or touched.
 
 ## Keyboard
 
@@ -34,6 +38,18 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 
 In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the gear
 to open Displays settings.
+
+## Brightness sync
+
+With two or more displays, the panel shows a **Sync Brightness** switch. While it is on, changing
+any display's brightness — from the panel, the keyboard, Control Center, Siri, or macOS itself
+(auto-brightness, the native keys) — moves the others by the same amount.
+
+- Displays keep the difference they had when sync was switched on, because 50% on one panel is
+  rarely as bright as 50% on another. To change it, switch sync off, set each display, switch it on again.
+- A display that reaches 0% or 100% waits there and returns to its offset when the others come back.
+- Apple displays are read through the private DisplayServices framework and checked every 1.5 s;
+  the monitor is only sent a DDC command when its own 0–100 value actually changes.
 
 ## Install
 
@@ -75,7 +91,7 @@ After the first install:
 
 | Path | Purpose |
 | --- | --- |
-| `DisplayKit/` | Swift package: DDC/CI over `IOAVService`, display discovery, `displayctl` |
+| `DisplayKit/` | Swift package: DDC/CI over `IOAVService`, native brightness, sync arithmetic, display discovery, `displayctl` |
 | `App/` | The menu bar app |
 | `Controls/` | Control Center extension (sandboxed; forwards commands to the app) |
 | `Shared/` | Command and state definitions used by both |

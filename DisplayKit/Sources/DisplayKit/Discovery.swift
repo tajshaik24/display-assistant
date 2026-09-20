@@ -3,11 +3,19 @@ import CIOAVService
 import CoreGraphics
 import IOKit
 
-/// An external display that has a DDC channel.
-public struct ExternalDisplay {
+/// A display whose brightness can be controlled, one way or the other.
+public struct ControllableDisplay {
+    public enum Backend {
+        /// A third-party monitor, controlled over DDC/CI (brightness, volume, mute).
+        case ddc(DDCChannel)
+        /// A display macOS controls itself; brightness only, through ``NativeBrightness``.
+        case native
+    }
+
     public let id: CGDirectDisplayID
     public let name: String
-    public let ddc: DDCChannel
+    public let isBuiltIn: Bool
+    public let backend: Backend
 }
 
 public enum DisplayDiscovery {
@@ -19,30 +27,36 @@ public enum DisplayDiscovery {
         var name: String?
     }
 
-    /// Apple's own displays are controlled natively by macOS and don't speak DDC, so leave them alone.
+    /// Apple's own displays don't speak DDC; they are only ever controlled natively.
     private static let appleVendorID: UInt32 = 0x610
 
-    public static func externalDisplays() -> [ExternalDisplay] {
+    public static func displays() -> [ControllableDisplay] {
         var services = externalAVServices().filter { $0.identity.vendor != appleVendorID }
-        var result: [ExternalDisplay] = []
+        var result: [ControllableDisplay] = []
 
-        for id in onlineExternalDisplayIDs() {
-            guard !services.isEmpty else { break }
+        for id in onlineDisplayIDs() {
+            let isBuiltIn = CGDisplayIsBuiltin(id) != 0
+            if NativeBrightness.canChange(id) {
+                let name = screenName(for: id) ?? (isBuiltIn ? "Built-in Display" : "Display")
+                result.append(ControllableDisplay(id: id, name: name, isBuiltIn: isBuiltIn, backend: .native))
+                continue
+            }
+            guard !isBuiltIn, CGDisplayVendorNumber(id) != appleVendorID, !services.isEmpty else { continue }
             // Prefer an exact EDID match; with a single candidate left, order is good enough.
             let index = services.firstIndex { matches($0.identity, display: id) } ?? 0
             let (service, identity) = services.remove(at: index)
             let name = screenName(for: id) ?? identity.name ?? "External Display"
-            result.append(ExternalDisplay(id: id, name: name, ddc: DDCChannel(service: service)))
+            result.append(ControllableDisplay(id: id, name: name, isBuiltIn: false, backend: .ddc(DDCChannel(service: service))))
         }
         return result
     }
 
-    private static func onlineExternalDisplayIDs() -> [CGDirectDisplayID] {
+    private static func onlineDisplayIDs() -> [CGDirectDisplayID] {
         var count: UInt32 = 0
         CGGetOnlineDisplayList(0, nil, &count)
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
         CGGetOnlineDisplayList(count, &ids, &count)
-        return ids.prefix(Int(count)).filter { CGDisplayIsBuiltin($0) == 0 && CGDisplayVendorNumber($0) != appleVendorID }
+        return Array(ids.prefix(Int(count)))
     }
 
     private static func screenName(for id: CGDirectDisplayID) -> String? {
