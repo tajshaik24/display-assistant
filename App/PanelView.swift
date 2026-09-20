@@ -31,9 +31,8 @@ private struct DisplayCard: View {
             HStack(spacing: 10) {
                 Image(systemName: "display")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 30, height: 30)
-                    .background(LinearGradient(colors: [.indigo, .blue], startPoint: .topLeading, endPoint: .bottomTrailing), in: .rect(cornerRadius: 8))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(display.name).font(.system(size: 13, weight: .semibold))
                     Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -52,19 +51,18 @@ private struct DisplayCard: View {
                 .help("Open Display Settings")
                 .accessibilityLabel("Open Display Settings")
             }
+            .padding(.horizontal, 6)
 
             ForEach(DisplayModel.Control.allCases.filter(display.supports), id: \.self) { control in
-                PillSlider(
+                ControlSlider(
                     control: control,
                     value: display.value(control),
                     isMuted: control == .volume && display.isMuted,
                     onChange: { display.set(control, to: $0) },
-                    onIconTap: control == .volume ? { display.setMuted(!display.isMuted) } : nil
+                    onMinimumIconTap: control == .volume ? { display.setMuted(!display.isMuted) } : nil
                 )
             }
         }
-        .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     private static let displaySettingsURL = URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!
