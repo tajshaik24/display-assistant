@@ -115,10 +115,10 @@ fi
 if [[ "$BUILD_CONFIG" == "debug" ]]; then CONFIGURATION="Debug"; else CONFIGURATION="Release"; fi
 echo "Building $APP_NAME ($CONFIGURATION)..."
 xcodegen generate --quiet
-# xcodebuild -quiet still prints a spurious "failed with exit code 0" line for the package; drop it.
+# Even with -quiet, xcodebuild prints two harmless lines on every build; drop them.
 xcodebuild -project DisplayAssistant.xcodeproj -scheme "$SCHEME" -configuration "$CONFIGURATION" \
     -destination "platform=macOS,arch=arm64" -derivedDataPath "$OUTPUT_DIR" -quiet build ${SIGN_SETTINGS[@]+"${SIGN_SETTINGS[@]}"} \
-    2> >(grep -v "exit code 0 but produced no further output" >&2)
+    2> >(grep -Ev "exit code 0 but produced no further output|IDERunDestination: Supported platforms" >&2)
 
 APP_BUNDLE="$OUTPUT_DIR/Build/Products/$CONFIGURATION/$APP_NAME.app"
 if [[ ! -d "$APP_BUNDLE" ]]; then
