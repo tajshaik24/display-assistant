@@ -1,0 +1,61 @@
+name: DisplayAssistant
+options:
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  DisplayKit:
+    path: DisplayKit
+settings:
+  base:
+    DEVELOPMENT_TEAM: LDUCPMFSMH
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: Apple Development
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  DisplayAssistant:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    dependencies:
+      - package: DisplayKit
+        product: DisplayKit
+      - target: DisplayAssistantControls
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tajshaik.DisplayAssistant
+        PRODUCT_NAME: Display Assistant
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Display Assistant
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+    entitlements:
+      path: App/DisplayAssistant.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - LDUCPMFSMH.com.tajshaik.DisplayAssistant
+  DisplayAssistantControls:
+    type: app-extension
+    platform: macOS
+    sources: [Controls, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tajshaik.DisplayAssistant.Controls
+    info:
+      path: Controls/Info.plist
+      properties:
+        CFBundleDisplayName: Display Assistant
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Controls/Controls.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - LDUCPMFSMH.com.tajshaik.DisplayAssistant
