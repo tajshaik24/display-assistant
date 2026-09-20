@@ -6,7 +6,7 @@ struct DisplayAssistantApp: App {
 
     /// MenuBarExtra ignores font and frame modifiers on its label, so the symbol is sized up front.
     private static let menuBarIcon: NSImage = {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 17, weight: .medium)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 15.3, weight: .medium)
         let image = NSImage(systemSymbolName: "display", accessibilityDescription: "Display Assistant")?
             .withSymbolConfiguration(configuration) ?? NSImage()
         image.isTemplate = true
