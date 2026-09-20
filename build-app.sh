@@ -111,13 +111,17 @@ if [[ "$NOTARIZE" == true ]]; then
     SIGN_SETTINGS+=(OTHER_CODE_SIGN_FLAGS=--timestamp)
 fi
 
+# A unique, increasing build number for every build. The system caches the extension's
+# Control Center controls per version, so without this, added or changed controls never show up.
+BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+
 # --- Build ---
 if [[ "$BUILD_CONFIG" == "debug" ]]; then CONFIGURATION="Debug"; else CONFIGURATION="Release"; fi
 echo "Building $APP_NAME ($CONFIGURATION)..."
 xcodegen generate --quiet
 # Even with -quiet, xcodebuild prints two harmless lines on every build; drop them.
 xcodebuild -project DisplayAssistant.xcodeproj -scheme "$SCHEME" -configuration "$CONFIGURATION" \
-    -destination "platform=macOS,arch=arm64" -derivedDataPath "$OUTPUT_DIR" -quiet build ${SIGN_SETTINGS[@]+"${SIGN_SETTINGS[@]}"} \
+    -destination "platform=macOS,arch=arm64" -derivedDataPath "$OUTPUT_DIR" -quiet build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" ${SIGN_SETTINGS[@]+"${SIGN_SETTINGS[@]}"} \
     2> >(grep -Ev "exit code 0 but produced no further output|IDERunDestination: Supported platforms" >&2)
 
 APP_BUNDLE="$OUTPUT_DIR/Build/Products/$CONFIGURATION/$APP_NAME.app"
