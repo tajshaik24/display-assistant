@@ -67,8 +67,27 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 ## Install
 
 Download the latest build from [Releases](https://github.com/tajshaik24/display-assistant/releases),
-move it to `/Applications` and open it. Builds are signed but not notarized, so the first launch has to
-be allowed under System Settings → Privacy & Security → **Open Anyway**.
+unzip it and move **Display Assistant.app** to `/Applications`.
+
+Builds are signed but not notarized, so macOS blocks the first launch of a downloaded copy. Clear that
+once, either way:
+
+- **Terminal (quickest):** after moving the app to `/Applications`, run
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Display Assistant.app"
+  ```
+
+  This removes the quarantine flag your browser put on the download; the app then opens normally.
+- **No Terminal:** open the app once, let macOS block it, then choose System Settings →
+  Privacy & Security → **Open Anyway**.
+
+Then, on each Mac (permissions don't carry over between machines):
+
+1. Open the panel from the menu bar and press **Enable** to grant Accessibility access for the keyboard keys.
+2. Optional: Control Center → Edit Controls → search for "Display".
+
+Launch at Login switches itself on. Building from source (below) avoids the Gatekeeper step entirely.
 
 ## Build from source
 
