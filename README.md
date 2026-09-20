@@ -43,16 +43,33 @@ be allowed under System Settings → Privacy & Security → **Open Anyway**.
 
 ## Build from source
 
-Requires Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) and macOS 26 or later.
+Requires Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) and macOS 26 or later.
 
-    ./scripts/build.sh --install
+```bash
+# Build and install to /Applications, replacing and relaunching any running copy
+./build-app.sh --install
 
-Then:
+# Release build only (output in build/Build/Products/Release/)
+./build-app.sh
+
+# Debug build
+./build-app.sh debug
+```
+
+By default the script signs with your **Apple Development** identity (auto-detected), which keeps the
+Accessibility permission stable across rebuilds. Pass `--identity "-"` for ad-hoc signing or
+`--identity "NAME"` to choose a specific certificate. The signing team is set in `project.yml`, and the
+matching app group in `Shared/Shared.swift`.
+
+`./build-app.sh release --notarize` signs with a **Developer ID Application** certificate, submits the
+app to Apple's notary service and staples the ticket, producing `build/DisplayAssistant.zip` for a
+release that opens without a Gatekeeper warning. See the header of `build-app.sh` for the one-time
+`notarytool` credentials setup.
+
+After the first install:
 
 1. Open the panel from the menu bar and press **Enable** to grant Accessibility access for the keyboard keys.
 2. Add the controls: Control Center → Edit Controls → search for "Display".
-
-The signing team is set in `project.yml`, and the matching app group in `Shared/Shared.swift`.
 
 ## Layout
 
