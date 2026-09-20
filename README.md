@@ -8,7 +8,8 @@ Built for an LG UltraGear on Apple Silicon.
 - **Sync Brightness**: all displays move together, so the monitor follows your MacBook's
   auto-brightness and brightness keys (see [Brightness sync](#brightness-sync))
 - Keyboard brightness, volume and mute keys, with fine steps (see [Keyboard](#keyboard))
-- Control Center / menu bar controls: mute toggle, brightness up/down, volume up/down
+- Control Center controls: open the sliders, one-tap brightness and volume levels, mute toggle
+  (see [Control Center](#control-center))
 - Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle
 - `displayctl` command-line tool for scripts
 
@@ -38,6 +39,18 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 
 In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the gear
 to open Displays settings.
+
+## Control Center
+
+macOS only lets apps add buttons and toggles to Control Center — sliders are reserved for Apple's own
+modules. Add these from Control Center → Edit Controls → search "Display":
+
+| Control | What it does |
+| --- | --- |
+| **Display Sliders** | Opens the brightness and volume sliders as a panel where Control Center appears. Click anywhere else or press `esc` to close it. |
+| **Display Brightness Level** | Sets a brightness you choose when adding it (for example 30% for evenings, 80% for daytime). Add as many as you like. |
+| **Display Volume Level** | The same for the display's speaker volume. |
+| **Mute Display** | Toggle that mutes or unmutes the display's speakers. |
 
 ## Brightness sync
 
@@ -100,4 +113,3 @@ After the first install:
 
 - DDC works over USB-C, Thunderbolt and DisplayPort. Some docks, adapters and DisplayLink
   devices don't pass it through. DDC/CI must be enabled in the monitor's on-screen menu.
-- Control Center controls can only be buttons and toggles, so sliders live in the menu bar panel.

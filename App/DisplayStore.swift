@@ -39,7 +39,7 @@ final class DisplayStore: ObservableObject {
             MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
         DistributedNotificationCenter.default().addObserver(forName: Shared.commandNotification, object: nil, queue: .main) { [weak self] notification in
-            let command = (notification.object as? String).flatMap(DisplayCommand.init)
+            let command = (notification.object as? String).flatMap { DisplayCommand($0) }
             MainActor.assumeIsolated {
                 if let command { self?.perform(command) }
             }
@@ -76,19 +76,21 @@ final class DisplayStore: ObservableObject {
     }
 
     func perform(_ command: DisplayCommand) {
-        let control: DisplayModel.Control = switch command {
-        case .brightnessUp, .brightnessDown: .brightness
-        case .volumeUp, .volumeDown, .mute, .unmute: .volume
+        let control: DisplayModel.Control
+        switch command {
+        case .showPanel:
+            QuickPanel.shared.show()
+            return
+        case .setBrightness: control = .brightness
+        case .setVolume, .mute, .unmute: control = .volume
         }
         let targets = commandTargets(for: control)
         for display in targets {
             switch command {
-            case .brightnessUp: display.step(.brightness, by: KeyStep.normal)
-            case .brightnessDown: display.step(.brightness, by: -KeyStep.normal)
-            case .volumeUp: display.step(.volume, by: KeyStep.normal)
-            case .volumeDown: display.step(.volume, by: -KeyStep.normal)
+            case .setBrightness(let percent), .setVolume(let percent): display.set(control, to: Double(percent) / 100)
             case .mute: display.setMuted(true)
             case .unmute: display.setMuted(false)
+            case .showPanel: break
             }
         }
         if let display = targets.first { HUD.shared.show(control, for: display) }

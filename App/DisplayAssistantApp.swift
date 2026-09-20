@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct DisplayAssistantApp: App {
-    @StateObject private var services = Services()
+    private let services = Services.shared
 
     /// MenuBarExtra ignores font and frame modifiers on its label, so the symbol is sized up front.
     private static let menuBarIcon: NSImage = {
@@ -26,11 +26,13 @@ struct DisplayAssistantApp: App {
 /// Owns the long-lived objects; created at launch so the keyboard keys and
 /// Control Center work without the panel ever being opened.
 @MainActor
-private final class Services: ObservableObject {
+final class Services {
+    static let shared = Services()
+
     let store: DisplayStore
     let keyboard: KeyboardController
 
-    init() {
+    private init() {
         store = .shared
         keyboard = KeyboardController(store: store)
         LoginItem.enableOnFirstLaunch()

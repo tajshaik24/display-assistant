@@ -54,6 +54,7 @@ struct ControlSlider: View {
 
     @State private var isDragging = false
     @State private var isHovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let trackHeight: CGFloat = 6
     private static let hitHeight: CGFloat = 22
@@ -106,7 +107,8 @@ struct ControlSlider: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.primary.opacity(0.14))
                     .frame(height: Self.trackHeight)
-                Capsule().fill(.primary.opacity(0.9))
+                // An explicit color: semantic styles are rendered vibrant (and much dimmer) inside glass.
+                Capsule().fill(colorScheme == .dark ? Color.white : Color.black.opacity(0.8))
                     .frame(width: shownValue == 0 ? 0 : knobX, height: Self.trackHeight)
                 Circle().fill(.white)
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)

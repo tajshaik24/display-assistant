@@ -84,6 +84,7 @@ private struct HUDView: View {
 private struct HUDContent: View {
     @ObservedObject var display: DisplayModel
     let control: DisplayModel.Control
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let value = control == .volume && display.isMuted ? 0 : display.value(control)
@@ -95,7 +96,9 @@ private struct HUDContent: View {
             GeometryReader { proxy in
                 Capsule().fill(.primary.opacity(0.18))
                     .overlay(alignment: .leading) {
-                        Capsule().fill(.primary).frame(width: max(6, proxy.size.width * value))
+                        // An explicit color: semantic styles are rendered vibrant (and much dimmer) inside glass.
+                        Capsule().fill(colorScheme == .dark ? Color.white : Color.black.opacity(0.8))
+                            .frame(width: value == 0 ? 0 : max(6, proxy.size.width * value))
                     }
                     .clipShape(Capsule())
             }
