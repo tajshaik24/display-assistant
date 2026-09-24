@@ -56,11 +56,13 @@ modules. Add these from Control Center → Edit Controls → search "Display":
 
 With two or more displays, the panel shows a **Sync Brightness** switch. While it is on, changing
 any display's brightness — from the panel, the keyboard, Control Center, Siri, or macOS itself
-(auto-brightness, the native keys) — sets the others to the same value.
+(auto-brightness, the native keys) — moves the others with it.
 
-- Switching sync on brings every display to the brightness of the Apple display (the built-in one
-  first), or of the first display when there is none. A display connected while sync is on is
-  brought to the same level.
+- Displays keep the relationship they had when sync was switched on, because 50% on one panel is
+  rarely as bright as 50% on another: a monitor set a little brighter than the MacBook stays a
+  little brighter. The difference narrows toward the ends, so all displays reach 0% and 100% together.
+- To set a new relationship, switch sync off, set each display, and switch it on again. If the Apple
+  display is at 0% or 100% when you switch sync on, the displays simply match.
 - Apple displays are read through the private DisplayServices framework and checked every 1.5 s;
   the monitor is only sent a DDC command when its own 0–100 value actually changes.
 

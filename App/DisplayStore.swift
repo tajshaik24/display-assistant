@@ -11,11 +11,12 @@ final class DisplayStore: ObservableObject {
     @Published private(set) var displays: [DisplayModel] = []
     /// True while connected displays are still being queried for the first time.
     @Published private(set) var isLoading = false
-    /// When on, every display is brought to the same brightness and they then move together.
+    /// When on, a brightness change on any display moves the others, keeping how bright each was
+    /// relative to the rest while meeting at 0% and 100%.
     @Published var isSyncEnabled = UserDefaults.standard.bool(forKey: DisplayStore.syncKey) {
         didSet {
             UserDefaults.standard.set(isSyncEnabled, forKey: Self.syncKey)
-            alignSync()
+            rebaseSync()
         }
     }
 
@@ -98,22 +99,29 @@ final class DisplayStore: ObservableObject {
 
     // MARK: - Sync
 
-    /// Brings every display to the leader's brightness so they read the same from then on. The leader
-    /// is the Apple display when there is one, since macOS moves it through auto-brightness and its keys.
-    private func alignSync() {
-        guard isSyncEnabled else { return }
-        let synced = displays.filter { $0.supports(.brightness) }
-        guard let leader = synced.first(where: \.isBuiltIn) ?? synced.first(where: \.isNative) ?? synced.first else { return }
-        let level = leader.value(.brightness)
-        for display in synced where display !== leader {
-            display.set(.brightness, to: level, notify: false)
-        }
-        sync.align(synced.map(\.id), to: level)
+    /// Starts sync from the displays' current brightness, keeping how each relates to the leader.
+    private func rebaseSync() {
+        guard isSyncEnabled, let current = syncedBrightness() else { return }
+        sync.rebase(to: current.values, leader: current.leader)
     }
 
-    private func brightnessChanged(on display: DisplayModel, from old: Double, to new: Double) {
+    /// Takes in displays that connected while sync was on, without disturbing the others.
+    private func updateSync() {
+        guard isSyncEnabled, let current = syncedBrightness() else { return }
+        sync.update(to: current.values, leader: current.leader)
+    }
+
+    /// Every display's brightness, and the one sync measures the others against: the Apple display
+    /// when there is one, since macOS moves it through auto-brightness and its keys.
+    private func syncedBrightness() -> (values: [CGDirectDisplayID: Double], leader: CGDirectDisplayID)? {
+        let synced = displays.filter { $0.supports(.brightness) }
+        guard let leader = synced.first(where: \.isBuiltIn) ?? synced.first(where: \.isNative) ?? synced.first else { return nil }
+        return (Dictionary(uniqueKeysWithValues: synced.map { ($0.id, $0.value(.brightness)) }), leader.id)
+    }
+
+    private func brightnessChanged(on display: DisplayModel, to new: Double) {
         guard isSyncEnabled else { return }
-        let targets = sync.change(display.id, from: old, to: new)
+        let targets = sync.change(display.id, to: new)
         for other in displays {
             guard let target = targets[other.id] else { continue }
             other.set(.brightness, to: target, notify: false)
@@ -163,7 +171,7 @@ final class DisplayStore: ObservableObject {
             let model = DisplayModel(display: display)
             model.onMuteChange = { [weak self] _ in self?.publishMuteState() }
             model.onLoad = { [weak self] in self?.publishControllable() }
-            model.onBrightnessChange = { [weak self] display, old, new in self?.brightnessChanged(on: display, from: old, to: new) }
+            model.onBrightnessChange = { [weak self] display, _, new in self?.brightnessChanged(on: display, to: new) }
             return model
         }
         publishControllable()
@@ -172,7 +180,7 @@ final class DisplayStore: ObservableObject {
     private func publishControllable() {
         displays = candidates.filter(\.isControllable)
         isLoading = candidates.contains { !$0.isLoaded }
-        alignSync()
+        updateSync()
         updateNativePolling()
         publishMuteState()
     }

@@ -7,7 +7,7 @@ struct BrightnessSyncTests {
 
     private func synced(laptop laptopValue: Double, monitor monitorValue: Double) -> BrightnessSync {
         var sync = BrightnessSync()
-        sync.rebase(to: [laptop: laptopValue, monitor: monitorValue])
+        sync.rebase(to: [laptop: laptopValue, monitor: monitorValue], leader: laptop)
         return sync
     }
 
@@ -15,54 +15,70 @@ struct BrightnessSyncTests {
         #expect(abs((value ?? -1) - expected) < 1e-9)
     }
 
-    @Test func followersMoveByTheSameAmountKeepingTheirOffset() {
-        var sync = synced(laptop: 0.5, monitor: 0.7)
-        expect(sync.change(laptop, from: 0.5, to: 0.6)[monitor], equals: 0.8)
-        expect(sync.change(monitor, from: 0.8, to: 0.4)[laptop], equals: 0.2)
+    @Test func displaysReachZeroTogether() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        expect(sync.change(laptop, to: 0)[monitor], equals: 0)
+        expect(sync.change(monitor, to: 0)[laptop], equals: 0)
+    }
+
+    @Test func displaysReachFullTogether() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        expect(sync.change(laptop, to: 1)[monitor], equals: 1)
+    }
+
+    @Test func relationshipSurvivesAGoingToZeroAndBack() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        _ = sync.change(laptop, to: 0)
+        expect(sync.change(laptop, to: 0.5)[monitor], equals: 0.67)
+    }
+
+    @Test func followerKeepsItsSideOfTheLeader() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        let monitorValue = sync.change(laptop, to: 0.25)[monitor] ?? 0
+        #expect(monitorValue > 0.25 && monitorValue < 0.67)
+    }
+
+    @Test func movingTheFollowerMovesTheLeaderAlongTheSameCurve() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        expect(sync.change(monitor, to: 0.67)[laptop], equals: 0.5)
+    }
+
+    @Test func equalDisplaysStayEqual() {
+        var sync = synced(laptop: 0.4, monitor: 0.4)
+        expect(sync.change(laptop, to: 0.9)[monitor], equals: 0.9)
+        expect(sync.change(monitor, to: 0.1)[laptop], equals: 0.1)
+    }
+
+    @Test func leaderAtAnEndMeansDisplaysMatch() {
+        var sync = synced(laptop: 0, monitor: 0.17)
+        expect(sync.change(laptop, to: 0.3)[monitor], equals: 0.3)
     }
 
     @Test func changedDisplayIsNotToldToMove() {
         var sync = synced(laptop: 0.5, monitor: 0.7)
-        #expect(sync.change(laptop, from: 0.5, to: 0.6)[laptop] == nil)
-    }
-
-    @Test func offsetSurvivesAFollowerHittingTheLimit() {
-        var sync = synced(laptop: 0.5, monitor: 0.9)
-        // The monitor pins at 100% while the laptop keeps rising...
-        expect(sync.change(laptop, from: 0.5, to: 0.8)[monitor], equals: 1.0)
-        // ...and returns to its original +0.4 offset on the way back down.
-        expect(sync.change(laptop, from: 0.8, to: 0.5)[monitor], equals: 0.9)
-    }
-
-    @Test func movingAPinnedDisplayDirectlyDoesNotMakeOthersJump() {
-        var sync = synced(laptop: 0.5, monitor: 0.9)
-        _ = sync.change(laptop, from: 0.5, to: 0.8)  // monitor pinned at 1.0, wants 1.2
-        // Nudging the pinned monitor down by 0.1 moves the laptop by 0.1, not by the hidden 0.3.
-        expect(sync.change(monitor, from: 1.0, to: 0.9)[laptop], equals: 0.7)
+        #expect(sync.change(laptop, to: 0.6)[laptop] == nil)
     }
 
     @Test func unknownDisplayIsIgnored() {
         var sync = synced(laptop: 0.5, monitor: 0.7)
-        #expect(sync.change(99, from: 0.1, to: 0.9).isEmpty)
+        #expect(sync.change(99, to: 0.9).isEmpty)
     }
 
-    @Test func rebaseAdoptsNewDifferences() {
-        var sync = synced(laptop: 0.5, monitor: 0.7)
-        sync.rebase(to: [laptop: 0.5, monitor: 0.5])
-        expect(sync.change(laptop, from: 0.5, to: 0.3)[monitor], equals: 0.3)
+    @Test func updateKeepsExistingCurvesAndFitsNewDisplays() {
+        var sync = synced(laptop: 0.5, monitor: 0.67)
+        let other: UInt32 = 3
+        sync.update(to: [laptop: 0.5, monitor: 0.67, other: 0.25], leader: laptop)
+        let targets = sync.change(laptop, to: 0)
+        expect(targets[monitor], equals: 0)
+        expect(targets[other], equals: 0)
+        expect(sync.change(laptop, to: 0.5)[other], equals: 0.25)
     }
 
-    @Test func alignedDisplaysMoveInLockstep() {
+    @Test func updateWithNothingSyncedStartsOver() {
         var sync = BrightnessSync()
-        sync.align([laptop, monitor], to: 0.5)
-        expect(sync.change(laptop, from: 0.5, to: 0.0)[monitor], equals: 0.0)
-        expect(sync.change(monitor, from: 0.0, to: 0.17)[laptop], equals: 0.17)
-    }
-
-    @Test func alignedDisplaysStayTogetherAtTheLimits() {
-        var sync = BrightnessSync()
-        sync.align([laptop, monitor], to: 0.9)
-        expect(sync.change(laptop, from: 0.9, to: 1.0)[monitor], equals: 1.0)
-        expect(sync.change(laptop, from: 1.0, to: 0.4)[monitor], equals: 0.4)
+        sync.update(to: [laptop: 0.5], leader: laptop)
+        sync.update(to: [laptop: 0.5, monitor: 0.67], leader: laptop)
+        expect(sync.change(laptop, to: 0)[monitor], equals: 0)
+        expect(sync.change(laptop, to: 0.5)[monitor], equals: 0.67)
     }
 }

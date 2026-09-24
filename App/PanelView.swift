@@ -90,7 +90,7 @@ private struct SyncToggle: View {
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Sync Brightness").font(.system(size: 13, weight: .semibold))
-                    Text("Displays match the built-in display and move together")
+                    Text("Displays move together and reach 0% and 100% at the same time")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
