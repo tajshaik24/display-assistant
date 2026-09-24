@@ -72,6 +72,11 @@ final class DisplayStore: ObservableObject {
         return control == .brightness && isSyncEnabled ? Array(targets.prefix(1)) : targets
     }
 
+    /// Re-reads every display, so changes made with a monitor's own buttons show up.
+    func refreshValues() {
+        for display in displays { display.refresh() }
+    }
+
     func display(named name: String) -> DisplayModel? {
         displays.first { $0.name == name }
     }

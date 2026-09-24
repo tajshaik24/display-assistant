@@ -43,6 +43,13 @@ final class DisplayModel: ObservableObject, Identifiable {
     private var maxima: [Control: UInt16] = [:]
     private var supportsMute = false
 
+    private var isReading = false
+    private var readWaiters: [() -> Void] = []
+    /// Bumped on every local change, so a read that was in flight meanwhile doesn't undo it.
+    private var localChanges = 0
+    /// When the values were last known to match the monitor: read from it, or written by us.
+    private var lastSynced: ContinuousClock.Instant?
+
     // A display that has just woken or been plugged in can take a few seconds to answer.
     private static let loadAttempts = 4
     private static let loadRetryDelay: Duration = .seconds(3)
@@ -88,6 +95,7 @@ final class DisplayModel: ObservableObject, Identifiable {
         let new = min(1, max(0, newValue))
         values[control] = new
         write(control, old: old, new: new)
+        noteLocalChange()
 
         // Like macOS, touching the volume brings sound back.
         if control == .volume, isMuted, new > 0 { setMuted(false) }
@@ -101,6 +109,7 @@ final class DisplayModel: ObservableObject, Identifiable {
     func setMuted(_ muted: Bool) {
         guard muted != isMuted, let writer, supportsMute || supports(.volume) else { return }
         isMuted = muted
+        noteLocalChange()
         if supportsMute {
             writer.set(.mute, to: muted ? Self.muteOn : Self.muteOff)
         } else if let max = maxima[.volume] {
@@ -108,6 +117,25 @@ final class DisplayModel: ObservableObject, Identifiable {
             writer.set(.volume, to: muted ? 0 : UInt16((value(.volume) * Double(max)).rounded()))
         }
         onMuteChange?(muted)
+    }
+
+    /// Re-reads the monitor to pick up changes made with its own buttons, then calls `completion`.
+    /// Values read or written within `maxAge` are trusted as they are.
+    func refresh(ifOlderThan maxAge: Duration = .zero, then completion: (() -> Void)? = nil) {
+        if isNative {
+            refreshNativeBrightness()
+            completion?()
+        } else if let lastSynced, ContinuousClock.now - lastSynced < maxAge {
+            completion?()
+        } else {
+            readDDC(then: completion)
+        }
+    }
+
+    func refresh(ifOlderThan maxAge: Duration = .zero) async {
+        await withCheckedContinuation { continuation in
+            refresh(ifOlderThan: maxAge) { continuation.resume() }
+        }
     }
 
     /// Picks up brightness changes made outside the app: auto-brightness, the native keys, Control Center.
@@ -129,29 +157,76 @@ final class DisplayModel: ObservableObject, Identifiable {
         }
     }
 
-    private func loadDDC(attempt: Int = 1) {
-        writer?.read(Control.allCases.map(\.code) + [.mute]) { [weak self] results in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                for control in Control.allCases {
-                    guard let result = results[control.code], result.max > 0 else { continue }
-                    self.maxima[control] = result.max
-                    self.values[control] = Double(result.current) / Double(result.max)
-                }
-                if let mute = results[.mute] {
-                    self.supportsMute = true
-                    self.isMuted = mute.current == Self.muteOn
-                }
-                self.isLoaded = true
-                self.onLoad?()
+    private func noteLocalChange() {
+        localChanges += 1
+        lastSynced = .now
+    }
 
-                if !self.isControllable, attempt < Self.loadAttempts {
-                    Task { [weak self] in
-                        try? await Task.sleep(for: Self.loadRetryDelay)
-                        self?.loadDDC(attempt: attempt + 1)
-                    }
+    private func loadDDC(attempt: Int = 1) {
+        readDDC { [weak self] in
+            guard let self else { return }
+            self.isLoaded = true
+            self.onLoad?()
+
+            if !self.isControllable, attempt < Self.loadAttempts {
+                Task { [weak self] in
+                    try? await Task.sleep(for: Self.loadRetryDelay)
+                    self?.loadDDC(attempt: attempt + 1)
                 }
             }
         }
+    }
+
+    /// Reads every control from the monitor. Calls made while a read is in flight share its result.
+    private func readDDC(then completion: (() -> Void)?) {
+        guard let writer else {
+            completion?()
+            return
+        }
+        if let completion { readWaiters.append(completion) }
+        guard !isReading else { return }
+        isReading = true
+        let changesAtStart = localChanges
+        writer.read(Control.allCases.map(\.code) + [.mute]) { [weak self] results in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isReading = false
+                if self.localChanges == changesAtStart, !results.isEmpty {
+                    self.apply(results)
+                    self.lastSynced = .now
+                }
+                let waiters = self.readWaiters
+                self.readWaiters = []
+                for waiter in waiters { waiter() }
+            }
+        }
+    }
+
+    private func apply(_ results: [VCPCode: VCPValue]) {
+        if let mute = results[.mute] {
+            supportsMute = true
+            setMutedFromMonitor(mute.current == Self.muteOn)
+        }
+        for control in Control.allCases {
+            guard let result = results[control.code], result.max > 0 else { continue }
+            maxima[control] = result.max
+            let old = values[control]
+            // Keep our finer value while it still maps to what the monitor reports.
+            if let old, UInt16((old * Double(result.max)).rounded()) == result.current { continue }
+            if control == .volume, isMuted, !supportsMute {
+                // Muted by zeroing the volume: keep the level to restore, unless it was turned up on the monitor.
+                guard result.current > 0 else { continue }
+                setMutedFromMonitor(false)
+            }
+            let new = Double(result.current) / Double(result.max)
+            values[control] = new
+            if control == .brightness, let old { onBrightnessChange?(self, old, new) }
+        }
+    }
+
+    private func setMutedFromMonitor(_ muted: Bool) {
+        guard muted != isMuted else { return }
+        isMuted = muted
+        onMuteChange?(muted)
     }
 }

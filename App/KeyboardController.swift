@@ -6,6 +6,8 @@ final class KeyboardController: ObservableObject {
     @Published private(set) var isActive = false
 
     private let store: DisplayStore
+    /// Held or quickly repeated keys trust the last value instead of reading the monitor on every press.
+    private static let staleAfter: Duration = .seconds(5)
     private let tap = MediaKeyTap()
     private var trustPoll: Timer?
 
@@ -52,6 +54,11 @@ final class KeyboardController: ObservableObject {
 
     private func handle(_ key: MediaKey, fine: Bool) {
         guard let display = target(for: key) else { return }
+        // The monitor's own buttons may have moved it since we last looked, so step from what it reports now.
+        display.refresh(ifOlderThan: Self.staleAfter) { self.apply(key, fine: fine, to: display) }
+    }
+
+    private func apply(_ key: MediaKey, fine: Bool, to display: DisplayModel) {
         let step = fine ? KeyStep.fine : KeyStep.normal
         switch key {
         case .brightnessUp: display.step(.brightness, by: step)

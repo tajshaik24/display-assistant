@@ -20,6 +20,8 @@ private func displays(supporting control: DisplayModel.Control) async throws -> 
     await store.waitUntilLoaded()
     let displays = store.commandTargets(for: control)
     guard !displays.isEmpty else { throw DisplayIntentError.noDisplay(control) }
+    // Report and toggle from what the monitors say now, not what they said when the app last looked.
+    for display in displays { await display.refresh() }
     return displays
 }
 

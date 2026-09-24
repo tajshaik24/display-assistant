@@ -24,6 +24,8 @@ final class QuickPanel: NSObject, NSWindowDelegate {
 
     func show() {
         guard let contentView = panel.contentView else { return }
+        // The hosted view stays alive between showings, so its onAppear won't re-read the displays.
+        DisplayStore.shared.refreshValues()
         let pointer = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
         let size = contentView.fittingSize
