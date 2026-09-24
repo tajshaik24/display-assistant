@@ -11,11 +11,11 @@ final class DisplayStore: ObservableObject {
     @Published private(set) var displays: [DisplayModel] = []
     /// True while connected displays are still being queried for the first time.
     @Published private(set) var isLoading = false
-    /// When on, a brightness change on any display moves the others by the same amount.
+    /// When on, every display is brought to the same brightness and they then move together.
     @Published var isSyncEnabled = UserDefaults.standard.bool(forKey: DisplayStore.syncKey) {
         didSet {
             UserDefaults.standard.set(isSyncEnabled, forKey: Self.syncKey)
-            rebaseSync()
+            alignSync()
         }
     }
 
@@ -65,7 +65,7 @@ final class DisplayStore: ObservableObject {
 
     /// Displays that commands without pointer context (Control Center, Siri, Shortcuts) act on:
     /// the DDC monitors, since macOS already covers the rest. With sync on, one is enough for
-    /// brightness — the others follow, keeping their offsets.
+    /// brightness — the others follow.
     func commandTargets(for control: DisplayModel.Control) -> [DisplayModel] {
         let targets = displays.filter { !$0.isNative && $0.supports(control) }
         return control == .brightness && isSyncEnabled ? Array(targets.prefix(1)) : targets
@@ -98,10 +98,17 @@ final class DisplayStore: ObservableObject {
 
     // MARK: - Sync
 
-    /// Takes the displays' current differences as the ones to keep.
-    private func rebaseSync() {
+    /// Brings every display to the leader's brightness so they read the same from then on. The leader
+    /// is the Apple display when there is one, since macOS moves it through auto-brightness and its keys.
+    private func alignSync() {
+        guard isSyncEnabled else { return }
         let synced = displays.filter { $0.supports(.brightness) }
-        sync.rebase(to: Dictionary(uniqueKeysWithValues: synced.map { ($0.id, $0.value(.brightness)) }))
+        guard let leader = synced.first(where: \.isBuiltIn) ?? synced.first(where: \.isNative) ?? synced.first else { return }
+        let level = leader.value(.brightness)
+        for display in synced where display !== leader {
+            display.set(.brightness, to: level, notify: false)
+        }
+        sync.align(synced.map(\.id), to: level)
     }
 
     private func brightnessChanged(on display: DisplayModel, from old: Double, to new: Double) {
@@ -165,7 +172,7 @@ final class DisplayStore: ObservableObject {
     private func publishControllable() {
         displays = candidates.filter(\.isControllable)
         isLoading = candidates.contains { !$0.isLoaded }
-        rebaseSync()
+        alignSync()
         updateNativePolling()
         publishMuteState()
     }

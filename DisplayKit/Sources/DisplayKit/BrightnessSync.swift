@@ -8,6 +8,12 @@ public struct BrightnessSync {
 
     public init() {}
 
+    /// Puts every display at the same brightness, so they move in lockstep from here on.
+    public mutating func align(_ displays: [CGDirectDisplayID], to value: Double) {
+        level = min(1, max(0, value))
+        offsets = Dictionary(uniqueKeysWithValues: displays.map { ($0, 0) })
+    }
+
     /// Takes the displays' current differences as the ones to keep.
     public mutating func rebase(to values: [CGDirectDisplayID: Double]) {
         level = 0

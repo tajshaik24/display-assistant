@@ -51,4 +51,18 @@ struct BrightnessSyncTests {
         sync.rebase(to: [laptop: 0.5, monitor: 0.5])
         expect(sync.change(laptop, from: 0.5, to: 0.3)[monitor], equals: 0.3)
     }
+
+    @Test func alignedDisplaysMoveInLockstep() {
+        var sync = BrightnessSync()
+        sync.align([laptop, monitor], to: 0.5)
+        expect(sync.change(laptop, from: 0.5, to: 0.0)[monitor], equals: 0.0)
+        expect(sync.change(monitor, from: 0.0, to: 0.17)[laptop], equals: 0.17)
+    }
+
+    @Test func alignedDisplaysStayTogetherAtTheLimits() {
+        var sync = BrightnessSync()
+        sync.align([laptop, monitor], to: 0.9)
+        expect(sync.change(laptop, from: 0.9, to: 1.0)[monitor], equals: 1.0)
+        expect(sync.change(laptop, from: 1.0, to: 0.4)[monitor], equals: 0.4)
+    }
 }
