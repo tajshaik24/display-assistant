@@ -3,19 +3,16 @@ import CIOAVService
 import CoreGraphics
 import IOKit
 
-/// A display whose brightness can be controlled, one way or the other.
+/// A display that can be controlled natively, over DDC/CI, or both.
 public struct ControllableDisplay {
-    public enum Backend {
-        /// A third-party monitor, controlled over DDC/CI (brightness, volume, mute).
-        case ddc(DDCChannel)
-        /// A display macOS controls itself; brightness only, through ``NativeBrightness``.
-        case native
-    }
-
     public let id: CGDirectDisplayID
     public let name: String
     public let isBuiltIn: Bool
-    public let backend: Backend
+    /// True when macOS controls the brightness itself, through ``NativeBrightness``: built-in panels,
+    /// Apple displays, and third-party monitors while HDR is on.
+    public let hasNativeBrightness: Bool
+    /// The DDC/CI channel of a third-party monitor: brightness (unless native), volume and mute.
+    public let ddc: DDCChannel?
 }
 
 public enum DisplayDiscovery {
@@ -36,17 +33,22 @@ public enum DisplayDiscovery {
 
         for id in onlineDisplayIDs() {
             let isBuiltIn = CGDisplayIsBuiltin(id) != 0
-            if NativeBrightness.canChange(id) {
-                let name = screenName(for: id) ?? (isBuiltIn ? "Built-in Display" : "Display")
-                result.append(ControllableDisplay(id: id, name: name, isBuiltIn: isBuiltIn, backend: .native))
-                continue
+            // With HDR on, macOS takes over a third-party monitor's brightness too, but its speakers still need DDC.
+            let isNative = NativeBrightness.canChange(id)
+            var identity: ServiceIdentity?
+            var ddc: DDCChannel?
+            if !isBuiltIn, CGDisplayVendorNumber(id) != appleVendorID, !services.isEmpty {
+                // Prefer an exact EDID match; with a single candidate left, order is good enough. A native display
+                // (an LG UltraFine, say) may not speak DDC at all, so it only takes an exact match.
+                if let index = services.firstIndex(where: { matches($0.identity, display: id) }) ?? (isNative ? nil : 0) {
+                    let entry = services.remove(at: index)
+                    identity = entry.identity
+                    ddc = DDCChannel(service: entry.service)
+                }
             }
-            guard !isBuiltIn, CGDisplayVendorNumber(id) != appleVendorID, !services.isEmpty else { continue }
-            // Prefer an exact EDID match; with a single candidate left, order is good enough.
-            let index = services.firstIndex { matches($0.identity, display: id) } ?? 0
-            let (service, identity) = services.remove(at: index)
-            let name = screenName(for: id) ?? identity.name ?? "External Display"
-            result.append(ControllableDisplay(id: id, name: name, isBuiltIn: false, backend: .ddc(DDCChannel(service: service))))
+            guard isNative || ddc != nil else { continue }
+            let name = screenName(for: id) ?? identity?.name ?? (isBuiltIn ? "Built-in Display" : "External Display")
+            result.append(ControllableDisplay(id: id, name: name, isBuiltIn: isBuiltIn, hasNativeBrightness: isNative, ddc: ddc))
         }
         return result
     }
@@ -87,15 +89,15 @@ public enum DisplayDiscovery {
         return result
     }
 
-    /// The EDID attributes live on the IOMobileFramebufferShim that shares a
-    /// `dispext` ancestor with the AV service, so walk up until we find one.
+    /// The EDID attributes live on an IOMobileFramebufferShim near the AV service: either under a shared
+    /// ancestor, or (on newer chips) under the `dispextN` node that sits beside the service's `dcpextN`.
     private static func identity(forAVService entry: io_registry_entry_t) -> ServiceIdentity {
         var current = entry
         IOObjectRetain(current)
         defer { IOObjectRelease(current) }
 
         while true {
-            if let attributes = childDisplayAttributes(of: current) {
+            if let attributes = childDisplayAttributes(of: current) ?? counterpartDisplayAttributes(of: current) {
                 let product = attributes["ProductAttributes"] as? [String: Any] ?? [:]
                 return ServiceIdentity(
                     vendor: (product["LegacyManufacturerID"] as? NSNumber)?.uint32Value,
@@ -110,6 +112,29 @@ public enum DisplayDiscovery {
             current = parent
         }
         return ServiceIdentity()
+    }
+
+    /// For a `dcpextN` node, the display attributes under its `dispextN` sibling.
+    private static func counterpartDisplayAttributes(of entry: io_registry_entry_t) -> [String: Any]? {
+        var nameBuffer = [CChar](repeating: 0, count: 128)
+        guard IORegistryEntryGetName(entry, &nameBuffer) == KERN_SUCCESS else { return nil }
+        let name = String(cString: nameBuffer)
+        guard name.hasPrefix("dcpext") else { return nil }
+        let counterpart = "disp" + name.dropFirst("dcp".count)
+
+        var parent: io_registry_entry_t = 0
+        guard IORegistryEntryGetParentEntry(entry, kIOServicePlane, &parent) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(parent) }
+        var iterator: io_iterator_t = 0
+        guard IORegistryEntryGetChildIterator(parent, kIOServicePlane, &iterator) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(iterator) }
+
+        while case let sibling = IOIteratorNext(iterator), sibling != 0 {
+            defer { IOObjectRelease(sibling) }
+            guard IORegistryEntryGetName(sibling, &nameBuffer) == KERN_SUCCESS, String(cString: nameBuffer) == counterpart else { continue }
+            return childDisplayAttributes(of: sibling)
+        }
+        return nil
     }
 
     private static func childDisplayAttributes(of entry: io_registry_entry_t) -> [String: Any]? {

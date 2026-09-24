@@ -5,11 +5,13 @@ import AppIntents
 
 enum DisplayIntentError: Error, CustomLocalizedStringResourceConvertible {
     case noDisplay(DisplayModel.Control)
+    case noHDR
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .noDisplay(.brightness): "No connected display supports brightness control."
         case .noDisplay(.volume): "No connected display supports volume control."
+        case .noHDR: "No connected display supports HDR."
         }
     }
 }
@@ -107,6 +109,42 @@ struct SetMuteIntent: AppIntent {
     }
 }
 
+struct SetHDRIntent: AppIntent {
+    static let title: LocalizedStringResource = "Set Display HDR"
+    static let description = IntentDescription("Turns High Dynamic Range on or off for your displays that support it.")
+
+    @Parameter(title: "Action", default: .toggle)
+    var action: HDRAction
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("\(\.$action) display HDR")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let store = DisplayStore.shared
+        await store.waitUntilLoaded()
+        let displays = store.displays.filter(\.supportsHDR)
+        guard !displays.isEmpty else { throw DisplayIntentError.noHDR }
+        let enabled = switch action {
+        case .turnOn: true
+        case .turnOff: false
+        case .toggle: !displays[0].isHDREnabled
+        }
+        for display in displays { display.setHDR(enabled) }
+        return .result(dialog: enabled ? "HDR turned on." : "HDR turned off.")
+    }
+}
+
+enum HDRAction: String, AppEnum {
+    case turnOn, turnOff, toggle
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "HDR Action"
+    static let caseDisplayRepresentations: [HDRAction: DisplayRepresentation] = [
+        .turnOn: "Turn On", .turnOff: "Turn Off", .toggle: "Toggle",
+    ]
+}
+
 struct GetBrightnessIntent: AppIntent {
     static let title: LocalizedStringResource = "Get Display Brightness"
     static let description = IntentDescription("Returns your external display's brightness, from 0 to 100.")
@@ -150,6 +188,12 @@ struct DisplayShortcuts: AppShortcutsProvider {
             phrases: ["\(\.$action) sound with \(.applicationName)", "Mute display with \(.applicationName)"],
             shortTitle: "Mute Display",
             systemImageName: "speaker.slash.fill"
+        )
+        AppShortcut(
+            intent: SetHDRIntent(),
+            phrases: ["\(\.$action) HDR with \(.applicationName)", "Toggle HDR with \(.applicationName)"],
+            shortTitle: "Set HDR",
+            systemImageName: "sparkles.tv"
         )
         AppShortcut(
             intent: GetBrightnessIntent(),

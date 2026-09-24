@@ -66,6 +66,18 @@ private struct DisplayCard: View {
                     onMinimumIconTap: control == .volume ? { display.setMuted(!display.isMuted) } : nil
                 )
             }
+
+            if display.supportsHDR {
+                HStack {
+                    Text("High Dynamic Range").font(.system(size: 12))
+                    Spacer()
+                    Toggle("High Dynamic Range", isOn: Binding(get: { display.isHDREnabled }, set: { display.setHDR($0) }))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                }
+                .padding(.horizontal, 6)
+            }
         }
     }
 

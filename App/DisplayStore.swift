@@ -52,23 +52,23 @@ final class DisplayStore: ObservableObject {
 
     // MARK: - Targeting
 
-    /// The display a key press is meant for: the DDC monitor under the pointer, if it can do
-    /// `control`. A pointer on any other screen (built-in, Studio Display, ...) means the system
-    /// should handle the key, so this returns nil and the key passes through.
+    /// The display a key press is meant for: the one under the pointer, if the app drives `control`
+    /// on it. Otherwise (a built-in screen, a Studio Display, a monitor's brightness in HDR, ...) the
+    /// system should handle the key, so this returns nil and the key passes through.
     func targetDisplay(for control: DisplayModel.Control) -> DisplayModel? {
         let pointer = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) else {
             return commandTargets(for: control).first
         }
         let display = displays.first { $0.screen == screen }
-        return display?.isNative == false && display?.supports(control) == true ? display : nil
+        return display?.controlsDirectly(control) == true ? display : nil
     }
 
     /// Displays that commands without pointer context (Control Center, Siri, Shortcuts) act on:
-    /// the DDC monitors, since macOS already covers the rest. With sync on, one is enough for
+    /// the ones the app drives over DDC, since macOS already covers the rest. With sync on, one is enough for
     /// brightness — the others follow.
     func commandTargets(for control: DisplayModel.Control) -> [DisplayModel] {
-        let targets = displays.filter { !$0.isNative && $0.supports(control) }
+        let targets = displays.filter { $0.controlsDirectly(control) }
         return control == .brightness && isSyncEnabled ? Array(targets.prefix(1)) : targets
     }
 

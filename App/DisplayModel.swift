@@ -19,13 +19,16 @@ final class DisplayModel: ObservableObject, Identifiable {
     let id: CGDirectDisplayID
     let name: String
     let isBuiltIn: Bool
-    /// True for displays macOS controls itself (built-in, Studio Display, ...). They only offer
-    /// brightness here, and their keys and volume stay with the system.
+    /// True when macOS controls the brightness itself: built-in, Studio Display, ..., and third-party
+    /// monitors while HDR is on. Brightness then goes through macOS; a third-party monitor's volume
+    /// still goes over DDC.
     let isNative: Bool
 
     @Published private(set) var values: [Control: Double] = [:]
     @Published private(set) var isMuted = false
     @Published private(set) var isLoaded = false
+    @Published private(set) var isHDREnabled: Bool
+    let supportsHDR: Bool
 
     /// Called whenever the mute state changes, so it can be mirrored to Control Center.
     var onMuteChange: ((Bool) -> Void)?
@@ -38,7 +41,7 @@ final class DisplayModel: ObservableObject, Identifiable {
     /// False for displays that answer neither way; those are left alone.
     var isControllable: Bool { !values.isEmpty }
 
-    /// Nil for native displays.
+    /// Nil for displays without DDC (Apple's own).
     private let writer: DDCWriter?
     private var maxima: [Control: UInt16] = [:]
     private var supportsMute = false
@@ -65,17 +68,28 @@ final class DisplayModel: ObservableObject, Identifiable {
         id = display.id
         name = display.name
         isBuiltIn = display.isBuiltIn
-        switch display.backend {
-        case .ddc(let channel):
-            isNative = false
-            writer = DDCWriter(ddc: channel, label: "DisplayAssistant.ddc.\(display.id)")
+        isNative = display.hasNativeBrightness
+        supportsHDR = HDRMode.isSupported(display.id)
+        isHDREnabled = HDRMode.isEnabled(display.id)
+        writer = display.ddc.map { DDCWriter(ddc: $0, label: "DisplayAssistant.ddc.\(display.id)") }
+        if isNative { values[.brightness] = NativeBrightness.get(display.id) }
+        if writer != nil {
             loadDDC()
-        case .native:
-            isNative = true
-            writer = nil
-            values[.brightness] = NativeBrightness.get(display.id)
+        } else {
             isLoaded = true
         }
+    }
+
+    /// Whether the app drives `control` itself, rather than leaving it (and its keys) to macOS. macOS
+    /// handles brightness keys only for its own displays, so a third-party monitor in HDR still needs the app.
+    func controlsDirectly(_ control: Control) -> Bool {
+        supports(control) && !(control == .brightness && isNative && writer == nil)
+    }
+
+    /// Switching makes macOS reconfigure the display, after which the store rediscovers it.
+    func setHDR(_ enabled: Bool) {
+        guard supportsHDR, enabled != isHDREnabled, HDRMode.setEnabled(id, enabled) else { return }
+        isHDREnabled = enabled
     }
 
     var screen: NSScreen? {
@@ -122,10 +136,8 @@ final class DisplayModel: ObservableObject, Identifiable {
     /// Re-reads the monitor to pick up changes made with its own buttons, then calls `completion`.
     /// Values read or written within `maxAge` are trusted as they are.
     func refresh(ifOlderThan maxAge: Duration = .zero, then completion: (() -> Void)? = nil) {
-        if isNative {
-            refreshNativeBrightness()
-            completion?()
-        } else if let lastSynced, ContinuousClock.now - lastSynced < maxAge {
+        refreshNativeBrightness()
+        if let lastSynced, ContinuousClock.now - lastSynced < maxAge {
             completion?()
         } else {
             readDDC(then: completion)
@@ -157,6 +169,11 @@ final class DisplayModel: ObservableObject, Identifiable {
         }
     }
 
+    /// Controls that go over DDC: all of them, except brightness when macOS has it.
+    private var ddcControls: [Control] {
+        Control.allCases.filter { !($0 == .brightness && isNative) }
+    }
+
     private func noteLocalChange() {
         localChanges += 1
         lastSynced = .now
@@ -168,7 +185,7 @@ final class DisplayModel: ObservableObject, Identifiable {
             self.isLoaded = true
             self.onLoad?()
 
-            if !self.isControllable, attempt < Self.loadAttempts {
+            if self.maxima.isEmpty, !self.supportsMute, attempt < Self.loadAttempts {
                 Task { [weak self] in
                     try? await Task.sleep(for: Self.loadRetryDelay)
                     self?.loadDDC(attempt: attempt + 1)
@@ -187,7 +204,7 @@ final class DisplayModel: ObservableObject, Identifiable {
         guard !isReading else { return }
         isReading = true
         let changesAtStart = localChanges
-        writer.read(Control.allCases.map(\.code) + [.mute]) { [weak self] results in
+        writer.read(ddcControls.map(\.code) + [.mute]) { [weak self] results in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isReading = false
@@ -207,7 +224,7 @@ final class DisplayModel: ObservableObject, Identifiable {
             supportsMute = true
             setMutedFromMonitor(mute.current == Self.muteOn)
         }
-        for control in Control.allCases {
+        for control in ddcControls {
             guard let result = results[control.code], result.max > 0 else { continue }
             maxima[control] = result.max
             let old = values[control]

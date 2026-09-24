@@ -10,12 +10,17 @@ Built for an LG UltraGear on Apple Silicon.
 - Keyboard brightness, volume and mute keys, with fine steps (see [Keyboard](#keyboard))
 - Control Center controls: open the sliders, one-tap brightness and volume levels, mute toggle
   (see [Control Center](#control-center))
-- Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle
-- `displayctl` command-line tool for scripts
+- **HDR switch** per display in the panel, and a Shortcuts action to turn HDR on or off
+  (for example from an automation when a movie app opens)
+- Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle, HDR on/off/toggle
+- `displayctl` command-line tool for scripts (brightness, volume, mute, HDR)
 
 Displays macOS controls itself (the built-in display, Studio Display, Pro Display XDR, LG UltraFine)
 appear in the panel with a brightness slider, but their keys, volume and system controls stay native.
 Displays that can be controlled neither way are never shown or touched.
+
+With HDR on, macOS takes over a DDC monitor's brightness. The app then sets brightness through macOS
+(the panel slider and brightness keys keep working) while volume and mute still go over DDC.
 
 ## Keyboard
 
