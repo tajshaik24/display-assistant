@@ -10,7 +10,7 @@ Built for an LG UltraGear on Apple Silicon.
 - Keyboard brightness, volume and mute keys, with fine steps (see [Keyboard](#keyboard))
 - Control Center controls: open the sliders, one-tap brightness and volume levels, mute toggle
   (see [Control Center](#control-center))
-- **HDR switch** per display in the panel, and a Shortcuts action to turn HDR on or off
+- **HDR button** per display in the panel, and a Shortcuts action to turn HDR on or off
   (for example from an automation when a movie app opens)
 - Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle, HDR on/off/toggle
 - `displayctl` command-line tool for scripts (brightness, volume, mute, HDR)
@@ -42,8 +42,9 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 - `⌥ Option` alone with a brightness key is left to macOS (it opens Displays settings), which is why
   fine steps need both modifiers — the same shortcut macOS uses for its own displays.
 
-In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the gear
-to open Displays settings.
+In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the **HDR**
+button under the **Display** slider to switch HDR. **Displays Settings…**, **Launch at Login** and
+**Quit** sit at the bottom, like the system's own menu bar panels.
 
 ## Control Center
 
@@ -59,7 +60,7 @@ modules. Add these from Control Center → Edit Controls → search "Display":
 
 ## Brightness sync
 
-With two or more displays, the panel shows a **Sync Brightness** switch. While it is on, changing
+With two or more displays, the panel shows a **Sync Brightness** button. While it is on, changing
 any display's brightness — from the panel, the keyboard, Control Center, Siri, or macOS itself
 (auto-brightness, the native keys) — moves the others with it.
 

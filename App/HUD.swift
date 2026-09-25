@@ -10,7 +10,7 @@ final class HUD {
     private let state = HUDState()
     private var hideTask: Task<Void, Never>?
 
-    private static let size = CGSize(width: 290, height: 52)
+    private static let size = CGSize(width: 262, height: 78)
     private static let margin: CGFloat = 10
 
     private lazy var panel: NSPanel = {
@@ -81,37 +81,23 @@ private struct HUDView: View {
     }
 }
 
+/// A small read-only Control Center module, like the system's own indicator.
 private struct HUDContent: View {
     @ObservedObject var display: DisplayModel
     let control: DisplayModel.Control
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let value = control == .volume && display.isMuted ? 0 : display.value(control)
-        HStack(spacing: 12) {
-            Image(systemName: control.symbol(value: value, muted: display.isMuted))
-                .font(.system(size: 17, weight: .semibold))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 26)
-            GeometryReader { proxy in
-                Capsule().fill(.primary.opacity(0.18))
-                    .overlay(alignment: .leading) {
-                        // An explicit color: semantic styles are rendered vibrant (and much dimmer) inside glass.
-                        Capsule().fill(colorScheme == .dark ? Color.white : Color.black.opacity(0.8))
-                            .frame(width: value == 0 ? 0 : max(6, proxy.size.width * value))
-                    }
-                    .clipShape(Capsule())
-            }
-            .frame(height: 6)
-            Text("\(Int((value * 100).rounded()))")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .frame(width: 28, alignment: .trailing)
-        }
-        .padding(.horizontal, 18)
+        ControlSlider(
+            control: control,
+            value: display.value(control),
+            isMuted: control == .volume && display.isMuted,
+            showsValue: false
+        )
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 11)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .glassEffect(.regular, in: .capsule)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18))
         .padding(4)
-        .animation(.snappy(duration: 0.18), value: value)
     }
 }
