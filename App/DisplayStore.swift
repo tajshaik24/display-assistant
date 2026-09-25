@@ -11,20 +11,17 @@ final class DisplayStore: ObservableObject {
     @Published private(set) var displays: [DisplayModel] = []
     /// True while connected displays are still being queried for the first time.
     @Published private(set) var isLoading = false
-    /// When on, a brightness change on any display moves the others, keeping how bright each was
-    /// relative to the rest while meeting at 0% and 100%.
+    /// When on, every display shows the same brightness: a change on any one moves the others to match.
     @Published var isSyncEnabled = UserDefaults.standard.bool(forKey: DisplayStore.syncKey) {
         didSet {
             UserDefaults.standard.set(isSyncEnabled, forKey: Self.syncKey)
-            rebaseSync()
+            alignSync()
         }
     }
 
     private var candidates: [DisplayModel] = []
     private var refreshTask: Task<Void, Never>?
     private var nativePoll: Timer?
-
-    private var sync = BrightnessSync()
 
     private static let syncKey = "syncBrightness"
     private static let nativePollInterval: TimeInterval = 1.5
@@ -104,32 +101,23 @@ final class DisplayStore: ObservableObject {
 
     // MARK: - Sync
 
-    /// Starts sync from the displays' current brightness, keeping how each relates to the leader.
-    private func rebaseSync() {
-        guard isSyncEnabled, let current = syncedBrightness() else { return }
-        sync.rebase(to: current.values, leader: current.leader)
+    /// Brings every display to the leader's brightness, when sync is switched on or displays connect.
+    private func alignSync() {
+        guard isSyncEnabled, let leader = syncLeader() else { return }
+        brightnessChanged(on: leader, to: leader.value(.brightness))
     }
 
-    /// Takes in displays that connected while sync was on, without disturbing the others.
-    private func updateSync() {
-        guard isSyncEnabled, let current = syncedBrightness() else { return }
-        sync.update(to: current.values, leader: current.leader)
-    }
-
-    /// Every display's brightness, and the one sync measures the others against: the Apple display
-    /// when there is one, since macOS moves it through auto-brightness and its keys.
-    private func syncedBrightness() -> (values: [CGDirectDisplayID: Double], leader: CGDirectDisplayID)? {
+    /// The display the others are matched to when sync starts: the Apple display when there is one,
+    /// since macOS moves it through auto-brightness and its keys.
+    private func syncLeader() -> DisplayModel? {
         let synced = displays.filter { $0.supports(.brightness) }
-        guard let leader = synced.first(where: \.isBuiltIn) ?? synced.first(where: \.isNative) ?? synced.first else { return nil }
-        return (Dictionary(uniqueKeysWithValues: synced.map { ($0.id, $0.value(.brightness)) }), leader.id)
+        return synced.first(where: \.isBuiltIn) ?? synced.first(where: \.isNative) ?? synced.first
     }
 
     private func brightnessChanged(on display: DisplayModel, to new: Double) {
         guard isSyncEnabled else { return }
-        let targets = sync.change(display.id, to: new)
-        for other in displays {
-            guard let target = targets[other.id] else { continue }
-            other.set(.brightness, to: target, notify: false)
+        for other in displays where other !== display && other.supports(.brightness) {
+            other.set(.brightness, to: new, notify: false)
         }
     }
 
@@ -185,7 +173,7 @@ final class DisplayStore: ObservableObject {
     private func publishControllable() {
         displays = candidates.filter(\.isControllable)
         isLoading = candidates.contains { !$0.isLoaded }
-        updateSync()
+        alignSync()
         updateNativePolling()
         publishMuteState()
     }
