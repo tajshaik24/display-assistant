@@ -43,8 +43,9 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
   fine steps need both modifiers — the same shortcut macOS uses for its own displays.
 
 In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the **HDR**
-button under the **Display** slider to switch HDR. **Displays Settings…**, **Launch at Login** and
-**Quit** sit at the bottom, like the system's own menu bar panels.
+button under the **Display** slider to switch HDR. A small **Settings** section holds
+**Launch at Login**, and **Displays Settings…** and **Quit** sit at the bottom, like the system's own
+menu bar panels.
 
 ## Control Center
 

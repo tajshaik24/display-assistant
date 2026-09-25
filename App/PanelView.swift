@@ -32,6 +32,8 @@ struct PanelView: View {
                     .padding(.top, 6)
             }
             MenuDivider()
+            SettingsSection()
+            MenuDivider()
             MenuFooter()
         }
         .padding(6)
@@ -115,9 +117,44 @@ private struct MenuDivider: View {
     }
 }
 
-private struct MenuFooter: View {
+/// App preferences, headed like the sections of the system's menu bar panels.
+private struct SettingsSection: View {
     @State private var launchesAtLogin = LoginItem.isEnabled
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Settings")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+            Toggle(isOn: $launchesAtLogin) {
+                Text("Launch at Login").font(.system(size: 13))
+            }
+            .toggleStyle(SettingSwitchStyle())
+            .onChange(of: launchesAtLogin) { _, enabled in
+                do { try LoginItem.setEnabled(enabled) } catch { launchesAtLogin = LoginItem.isEnabled }
+            }
+        }
+    }
+}
+
+/// A label with a small switch at the far end, like the Wi-Fi switch at the top of its panel.
+private struct SettingSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            Spacer()
+            Toggle("", isOn: configuration.$isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 24)
+    }
+}
+
+private struct MenuFooter: View {
     private static let displaySettingsURL = URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!
 
     var body: some View {
@@ -125,15 +162,6 @@ private struct MenuFooter: View {
             MenuItem(title: "Displays Settings…") {
                 NSWorkspace.shared.open(Self.displaySettingsURL)
             }
-            MenuItem(title: "Launch at Login") {
-                do { try LoginItem.setEnabled(!launchesAtLogin) } catch {}
-                launchesAtLogin = LoginItem.isEnabled
-            } trailing: {
-                if launchesAtLogin {
-                    Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
-                }
-            }
-            .accessibilityAddTraits(launchesAtLogin ? .isSelected : [])
             MenuItem(title: "Quit Display Assistant") {
                 NSApp.terminate(nil)
             } trailing: {
