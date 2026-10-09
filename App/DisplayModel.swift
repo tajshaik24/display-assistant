@@ -47,6 +47,8 @@ final class DisplayModel: ObservableObject, Identifiable {
     private var supportsMute = false
 
     private var isReading = false
+    private var isReadingNative = false
+    private var nativeReadWaiters: [() -> Void] = []
     private var readWaiters: [() -> Void] = []
     /// Bumped on every local change, so a read that was in flight meanwhile doesn't undo it.
     private var localChanges = 0
@@ -56,6 +58,11 @@ final class DisplayModel: ObservableObject, Identifiable {
     // A display that has just woken or been plugged in can take a few seconds to answer.
     private static let loadAttempts = 4
     private static let loadRetryDelay: Duration = .seconds(3)
+
+    /// DisplayServices calls are synchronous and can stall (around sleep and wake, say). Kept off the main
+    /// thread, where the key tap runs: a stall there holds up the brightness keys for macOS too.
+    /// Serial, so a read queued after a write sees it.
+    private static let nativeQueue = DispatchQueue(label: "DisplayAssistant.native")
 
     /// Smallest native brightness movement treated as a real change rather than rounding.
     private static let nativeChangeThreshold = 0.015
@@ -133,14 +140,17 @@ final class DisplayModel: ObservableObject, Identifiable {
         onMuteChange?(muted)
     }
 
-    /// Re-reads the monitor to pick up changes made with its own buttons, then calls `completion`.
-    /// Values read or written within `maxAge` are trusted as they are.
+    /// Re-reads the display to pick up changes made outside the app (its own buttons, macOS), then calls
+    /// `completion` once the values are current. DDC values read or written within `maxAge` are trusted as
+    /// they are; native brightness is always re-read.
     func refresh(ifOlderThan maxAge: Duration = .zero, then completion: (() -> Void)? = nil) {
-        refreshNativeBrightness()
-        if let lastSynced, ContinuousClock.now - lastSynced < maxAge {
-            completion?()
-        } else {
-            readDDC(then: completion)
+        let isFresh = lastSynced.map { ContinuousClock.now - $0 < maxAge } ?? false
+        refreshNativeBrightness { [weak self] in
+            guard let self, !isFresh else {
+                completion?()
+                return
+            }
+            self.readDDC(then: completion)
         }
     }
 
@@ -151,12 +161,36 @@ final class DisplayModel: ObservableObject, Identifiable {
     }
 
     /// Picks up brightness changes made outside the app: auto-brightness, the native keys, Control Center.
-    func refreshNativeBrightness() {
-        guard isNative, let current = NativeBrightness.get(id) else { return }
-        let old = value(.brightness)
-        guard abs(current - old) > Self.nativeChangeThreshold else { return }
-        values[.brightness] = current
-        onBrightnessChange?(self, old, current)
+    /// Then calls `completion`, right away for displays without native brightness. Calls made while a read
+    /// is in flight (a stalled one, say) share its result rather than stacking another.
+    func refreshNativeBrightness(then completion: (() -> Void)? = nil) {
+        guard isNative else {
+            completion?()
+            return
+        }
+        if let completion { nativeReadWaiters.append(completion) }
+        guard !isReadingNative else { return }
+        isReadingNative = true
+        let id = id
+        let changesAtStart = localChanges
+        Self.nativeQueue.async { [weak self] in
+            let current = NativeBrightness.get(id)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isReadingNative = false
+                // A local change made meanwhile is newer than what was read.
+                if let current, self.localChanges == changesAtStart {
+                    let old = self.value(.brightness)
+                    if abs(current - old) > Self.nativeChangeThreshold {
+                        self.values[.brightness] = current
+                        self.onBrightnessChange?(self, old, current)
+                    }
+                }
+                let waiters = self.nativeReadWaiters
+                self.nativeReadWaiters = []
+                for waiter in waiters { waiter() }
+            }
+        }
     }
 
     private func write(_ control: Control, old: Double, new: Double) {
@@ -165,7 +199,8 @@ final class DisplayModel: ObservableObject, Identifiable {
             let raw = UInt16((new * Double(max)).rounded())
             if raw != UInt16((old * Double(max)).rounded()) { writer.set(control.code, to: raw) }
         } else if isNative, control == .brightness {
-            NativeBrightness.set(id, to: new)
+            let id = id
+            Self.nativeQueue.async { NativeBrightness.set(id, to: new) }
         }
     }
 

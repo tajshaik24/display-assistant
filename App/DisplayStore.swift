@@ -15,7 +15,9 @@ final class DisplayStore: ObservableObject {
     @Published var isSyncEnabled = UserDefaults.standard.bool(forKey: DisplayStore.syncKey) {
         didSet {
             UserDefaults.standard.set(isSyncEnabled, forKey: Self.syncKey)
-            alignSync()
+            updateNativePolling()
+            // The leader isn't polled while sync is off, so read its current brightness before matching to it.
+            syncLeader()?.refreshNativeBrightness { [weak self] in self?.alignSync() }
         }
     }
 
@@ -54,9 +56,8 @@ final class DisplayStore: ObservableObject {
     /// system should handle the key, so this returns nil and the key passes through.
     func targetDisplay(for control: DisplayModel.Control) -> DisplayModel? {
         let pointer = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) else {
-            return commandTargets(for: control).first
-        }
+        // Off every screen, leave the key to macOS rather than guess.
+        guard let screen = NSScreen.containing(pointer) else { return nil }
         let display = displays.first { $0.screen == screen }
         return display?.controlsDirectly(control) == true ? display : nil
     }
@@ -121,9 +122,10 @@ final class DisplayStore: ObservableObject {
         }
     }
 
-    /// macOS has no public notification for brightness, so native displays are polled. Cheap: one float read each.
+    /// macOS has no public notification for brightness, so native displays are polled while sync needs to
+    /// follow them. Cheap: one float read each. Otherwise the panel re-reads them when it opens.
     private func updateNativePolling() {
-        let needsPolling = displays.contains(where: \.isNative)
+        let needsPolling = isSyncEnabled && displays.contains(where: \.isNative)
         if needsPolling, nativePoll == nil {
             nativePoll = Timer.scheduledTimer(withTimeInterval: Self.nativePollInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.pollNativeDisplays() }
@@ -138,9 +140,9 @@ final class DisplayStore: ObservableObject {
         for display in displays where display.isNative { display.refreshNativeBrightness() }
     }
 
-    /// Called when a brightness key was left to macOS, so followers react without waiting for the next poll.
+    /// Called when a brightness key was left to macOS, so synced displays and an open panel catch up
+    /// without waiting for the next poll (or, with sync off, without one at all).
     func nativeBrightnessMayHaveChanged() {
-        guard nativePoll != nil else { return }
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             self?.pollNativeDisplays()
@@ -198,4 +200,14 @@ enum KeyStep {
     /// macOS moves brightness and volume in sixteenths; ⌥⇧ gives quarter steps.
     static let normal = 1.0 / 16
     static let fine = 1.0 / 64
+}
+
+extension NSScreen {
+    /// The screen under `point`, edges included: the pointer can rest on a screen's top edge (the menu bar),
+    /// which `frame.contains` leaves out.
+    static func containing(_ point: CGPoint) -> NSScreen? {
+        screens.first {
+            ($0.frame.minX...$0.frame.maxX).contains(point.x) && ($0.frame.minY...$0.frame.maxY).contains(point.y)
+        }
+    }
 }

@@ -36,7 +36,8 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 
 - Holding a key repeats the step. An indicator under the menu bar shows the new level.
 - Brightness keys act on the external display the pointer is on. With the pointer on the built-in
-  display, an Apple display or a display without DDC, the key is passed through to macOS.
+  display, an Apple display or a display without DDC (or off every screen), the key is passed
+  through to macOS.
 - Volume and mute keys are only taken over while the Mac's sound output is a display
   (HDMI/DisplayPort/USB-C). With speakers, headphones or a Studio Display selected, they work as usual.
 - `⌥ Option` alone with a brightness key is left to macOS (it opens Displays settings), which is why
@@ -67,7 +68,8 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 
 - All displays show the same percentage, so they move together in even steps. When sync is
   switched on, or a display connects, the others are brought to the Apple display's brightness.
-- Apple displays are read through the private DisplayServices framework and checked every 1.5 s;
+- Apple displays are read through the private DisplayServices framework, off the main thread, and
+  checked every 1.5 s while sync is on;
   the monitor is only sent a DDC command when its own 0–100 value actually changes.
 
 ## Install
