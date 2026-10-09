@@ -176,6 +176,10 @@ if [[ "$INSTALL" == true ]]; then
     echo "Installing to /Applications/..."
     rm -rf "/Applications/$APP_NAME.app"
     ditto "$APP_BUNDLE" "/Applications/$APP_NAME.app"
+    # ditto keeps the bundle's old modification date, which macOS uses to decide whether its cached
+    # icon is stale. Bump it and re-register so a new icon shows up in Finder and the Dock.
+    touch "/Applications/$APP_NAME.app"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/$APP_NAME.app"
     open "/Applications/$APP_NAME.app"
 
     echo "Installed and launched /Applications/$APP_NAME.app"
