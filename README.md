@@ -1,19 +1,25 @@
-# Display Assistant
+<p align="center">
+  <img src="docs/icon.png" width="128" alt="Display Assistant icon">
+</p>
 
-A menu bar app that controls an external monitor's brightness and volume over DDC/CI,
-for displays macOS can't adjust itself, and keeps its brightness in sync with your Apple displays.
-Built for an LG UltraGear on Apple Silicon.
+<h1 align="center">Display Assistant</h1>
 
-- Menu bar panel with Control Center style Display and Sound sliders per monitor
-- **Sync Brightness**: all displays move together, so the monitor follows your MacBook's
-  auto-brightness and brightness keys (see [Brightness sync](#brightness-sync))
-- Keyboard brightness, volume and mute keys, with fine steps (see [Keyboard](#keyboard))
-- Control Center controls: open the sliders, one-tap brightness and volume levels, mute toggle
-  (see [Control Center](#control-center))
-- **HDR button** per display in the panel, and a Shortcuts action to turn HDR on or off
-  (for example from an automation when a movie app opens)
-- Siri, Shortcuts and Spotlight actions: set/get brightness and volume, mute/unmute/toggle, HDR on/off/toggle
-- `displayctl` command-line tool for scripts (brightness, volume, mute, HDR)
+<p align="center">Brightness and volume for your external monitor, right from the macOS menu bar.</p>
+
+Display Assistant controls monitors macOS can't adjust itself over DDC/CI, and keeps them in step
+with your Apple displays:
+
+- **Menu bar panel** — Control Center style Display and Sound sliders per monitor, a mute
+  button, an **HDR** toggle, and Launch at Login.
+- **Sync Brightness** — all displays move together, so the monitor follows your MacBook's
+  auto-brightness and brightness keys (see [Brightness sync](#brightness-sync)).
+- **Keyboard keys** — brightness (`F1`/`F2`), mute (`F10`) and volume (`F11`/`F12`) act on the
+  display under the pointer, with `⌥⇧` for fine steps (see [Keyboard](#keyboard)).
+- **Control Center** — open the sliders, one-tap brightness and volume levels, and a mute toggle
+  (see [Control Center](#control-center)).
+- **Shortcuts, Siri & Spotlight** — set or get brightness and volume, mute, and switch HDR
+  (for example from an automation when a movie app opens).
+- **`displayctl`** — a command-line tool for scripts (brightness, volume, mute, HDR).
 
 Displays macOS controls itself (the built-in display, Studio Display, Pro Display XDR, LG UltraFine)
 appear in the panel with a brightness slider, but their keys, volume and system controls stay native.
@@ -21,6 +27,10 @@ Displays that can be controlled neither way are never shown or touched.
 
 With HDR on, macOS takes over a DDC monitor's brightness. The app then sets brightness through macOS
 (the panel slider and brightness keys keep working) while volume and mute still go over DDC.
+
+In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the **HDR**
+button under the **Display** slider to switch HDR. **Displays Settings…** and **Quit** sit at the
+bottom, like the system's own menu bar panels.
 
 ## Keyboard
 
@@ -43,11 +53,6 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 - `⌥ Option` alone with a brightness key is left to macOS (it opens Displays settings), which is why
   fine steps need both modifiers — the same shortcut macOS uses for its own displays.
 
-In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the **HDR**
-button under the **Display** slider to switch HDR. A small **Settings** section holds
-**Launch at Login**, and **Displays Settings…** and **Quit** sit at the bottom, like the system's own
-menu bar panels.
-
 ## Control Center
 
 macOS only lets apps add buttons and toggles to Control Center — sliders are reserved for Apple's own
@@ -69,13 +74,13 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 - All displays show the same percentage, so they move together in even steps. When sync is
   switched on, or a display connects, the others are brought to the Apple display's brightness.
 - Apple displays are read through the private DisplayServices framework, off the main thread, and
-  checked every 1.5 s while sync is on;
-  the monitor is only sent a DDC command when its own 0–100 value actually changes.
+  checked every 1.5 s while sync is on; the monitor is only sent a DDC command when its own 0–100
+  value actually changes.
 
 ## Install
 
 Download the latest build from [Releases](https://github.com/tajshaik24/display-assistant/releases),
-unzip it and move **Display Assistant.app** to `/Applications`.
+unzip it and move **Display Assistant.app** to `/Applications`. Requires macOS 26 or later.
 
 Builds are signed but not notarized, so macOS blocks the first launch of a downloaded copy. Clear that
 once, either way:
@@ -97,19 +102,14 @@ Then, on each Mac (permissions don't carry over between machines):
 
 Launch at Login switches itself on. Building from source (below) avoids the Gatekeeper step entirely.
 
-## Build from source
+## Development
 
 Requires Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) and macOS 26 or later.
 
 ```bash
-# Build and install to /Applications, replacing and relaunching any running copy
-./build-app.sh --install
-
-# Release build only (output in build/Build/Products/Release/)
-./build-app.sh
-
-# Debug build
-./build-app.sh debug
+./build-app.sh --install   # build, install to /Applications and relaunch any running copy
+./build-app.sh             # release build only (build/Build/Products/Release/)
+./build-app.sh debug       # debug build
 ```
 
 By default the script signs with your **Apple Development** identity (auto-detected), which keeps the
@@ -122,12 +122,10 @@ app to Apple's notary service and staples the ticket, producing `build/DisplayAs
 release that opens without a Gatekeeper warning. See the header of `build-app.sh` for the one-time
 `notarytool` credentials setup.
 
-After the first install:
+After the first install, grant Accessibility access and add the controls as described under
+[Install](#install).
 
-1. Open the panel from the menu bar and press **Enable** to grant Accessibility access for the keyboard keys.
-2. Add the controls: Control Center → Edit Controls → search for "Display".
-
-## Layout
+## Architecture
 
 | Path | Purpose |
 | --- | --- |
@@ -140,3 +138,4 @@ After the first install:
 
 - DDC works over USB-C, Thunderbolt and DisplayPort. Some docks, adapters and DisplayLink
   devices don't pass it through. DDC/CI must be enabled in the monitor's on-screen menu.
+- Built and tested with an LG UltraGear on Apple Silicon.
