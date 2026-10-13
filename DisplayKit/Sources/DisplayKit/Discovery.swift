@@ -53,6 +53,13 @@ public enum DisplayDiscovery {
         return result
     }
 
+    /// Calls `handler` on the main queue whenever an external AV service appears. A monitor that re-links
+    /// (after it wakes, say) gets a new service without macOS reconfiguring the screen, and DDC channels
+    /// opened on the old one then fail silently. Keep the returned observer alive to keep watching.
+    public static func observeAVServices(_ handler: @escaping () -> Void) -> AnyObject? {
+        AVServiceObserver(handler: handler)
+    }
+
     private static func onlineDisplayIDs() -> [CGDirectDisplayID] {
         var count: UInt32 = 0
         CGGetOnlineDisplayList(0, nil, &count)
@@ -151,5 +158,47 @@ public enum DisplayDiscovery {
 
     private static func property(_ entry: io_registry_entry_t, _ key: String) -> Any? {
         IORegistryEntryCreateCFProperty(entry, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+    }
+}
+
+private final class AVServiceObserver {
+    private let handler: () -> Void
+    private let port: IONotificationPortRef
+    private var iterator: io_iterator_t = 0
+
+    init?(handler: @escaping () -> Void) {
+        guard let port = IONotificationPortCreate(kIOMainPortDefault) else { return nil }
+        self.handler = handler
+        self.port = port
+        IONotificationPortSetDispatchQueue(port, .main)
+        let callback: IOServiceMatchingCallback = { refcon, iterator in
+            guard let refcon else { return }
+            let observer = Unmanaged<AVServiceObserver>.fromOpaque(refcon).takeUnretainedValue()
+            if observer.drain(iterator) { observer.handler() }
+        }
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        guard IOServiceAddMatchingNotification(port, kIOFirstMatchNotification, IOServiceMatching("DCPAVServiceProxy"),
+                                               callback, refcon, &iterator) == KERN_SUCCESS else {
+            IONotificationPortDestroy(port)
+            return nil
+        }
+        // The notification is only armed once the services already present have been drained.
+        drain(iterator)
+    }
+
+    deinit {
+        IOObjectRelease(iterator)
+        IONotificationPortDestroy(port)
+    }
+
+    /// Releases every service in `iterator`; true if there was any.
+    @discardableResult
+    private func drain(_ iterator: io_iterator_t) -> Bool {
+        var found = false
+        while case let entry = IOIteratorNext(iterator), entry != 0 {
+            IOObjectRelease(entry)
+            found = true
+        }
+        return found
     }
 }

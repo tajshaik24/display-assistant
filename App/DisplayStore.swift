@@ -24,6 +24,7 @@ final class DisplayStore: ObservableObject {
     private var candidates: [DisplayModel] = []
     private var refreshTask: Task<Void, Never>?
     private var nativePoll: Timer?
+    private var avServiceObserver: AnyObject?
 
     private static let syncKey = "syncBrightness"
     private static let nativePollInterval: TimeInterval = 1.5
@@ -36,6 +37,10 @@ final class DisplayStore: ObservableObject {
             MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.scheduleRefresh() }
+        }
+        // A monitor can re-link (after it wakes, say) with neither of the above, leaving its DDC channel dead.
+        avServiceObserver = DisplayDiscovery.observeAVServices { [weak self] in
             MainActor.assumeIsolated { self?.scheduleRefresh() }
         }
         DistributedNotificationCenter.default().addObserver(forName: Shared.commandNotification, object: nil, queue: .main) { [weak self] notification in
