@@ -30,7 +30,8 @@ final class DisplayStore: ObservableObject {
     private static let nativePollInterval: TimeInterval = 1.5
 
     private init() {
-        refresh()
+        isLoading = true
+        refreshTask = Task { await refresh() }
 
         let center = NotificationCenter.default
         center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -103,6 +104,8 @@ final class DisplayStore: ObservableObject {
             }
         }
         if let display = targets.first { HUD.shared.show(control, for: display) }
+        // Control Center records the new mute state up front; put it right if no display took the command.
+        if command == .mute || command == .unmute { publishMuteState() }
     }
 
     // MARK: - Sync
@@ -162,16 +165,19 @@ final class DisplayStore: ObservableObject {
         refreshTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            self?.refresh()
+            await self?.refresh()
         }
     }
 
-    private func refresh() {
-        candidates = DisplayDiscovery.displays().map { display in
-            let model = DisplayModel(display: display)
-            model.onMuteChange = { [weak self] _ in self?.publishMuteState() }
+    private func refresh() async {
+        let discovered = await DisplayModel.discover()
+        // A newer refresh was scheduled meanwhile and will see the newer state.
+        guard !Task.isCancelled else { return }
+        candidates = discovered.map { discovered in
+            let model = DisplayModel(discovered)
+            model.onMuteChange = { [weak self] in self?.publishMuteState() }
             model.onLoad = { [weak self] in self?.publishControllable() }
-            model.onBrightnessChange = { [weak self] display, _, new in self?.brightnessChanged(on: display, to: new) }
+            model.onBrightnessChange = { [weak self] display, new in self?.brightnessChanged(on: display, to: new) }
             return model
         }
         publishControllable()

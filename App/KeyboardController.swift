@@ -48,7 +48,9 @@ final class KeyboardController: ObservableObject {
             // Only take the volume keys while sound is actually routed to a display.
             guard let deviceName = AudioOutput.displayDeviceName else { return nil }
             if let named = store.display(named: deviceName), named.supports(.volume) { return named }
-            return store.commandTargets(for: .volume).first
+            // The names can differ; that is only safe to ignore when a single display has speakers.
+            let speakers = store.commandTargets(for: .volume)
+            return speakers.count == 1 ? speakers[0] : nil
         }
     }
 

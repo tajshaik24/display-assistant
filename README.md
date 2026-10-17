@@ -9,8 +9,8 @@
 Display Assistant controls monitors macOS can't adjust itself over DDC/CI, and keeps them in step
 with your Apple displays:
 
-- **Menu bar panel** — Control Center style Display and Sound sliders per monitor, a mute
-  button, an **HDR** toggle, and Launch at Login.
+- **Menu bar panel** — Display and Sound sliders per monitor with the segmented track of the
+  macOS volume indicator, a mute button, an **HDR** toggle, and Launch at Login.
 - **Sync Brightness** — all displays move together, so the monitor follows your MacBook's
   auto-brightness and brightness keys (see [Brightness sync](#brightness-sync)).
 - **Keyboard keys** — brightness (`F1`/`F2`), mute (`F10`) and volume (`F11`/`F12`) act on the
@@ -44,12 +44,14 @@ keyboard these are the top-row keys (hold `fn` if you have them set to act as F1
 | Volume down / up | `F11` / `F12` | Changes the display's volume by 1/16 (about 6%) |
 | Fine step | `⌥ Option` + `⇧ Shift` + any key above | Moves by 1/64 (about 1.5%) instead; four fine steps equal one normal step |
 
-- Holding a key repeats the step. An indicator under the menu bar shows the new level.
+- Holding a key repeats the step. An indicator shows the new level in the top-right corner, in the
+  same place and style as the macOS volume indicator: one bar per step, so fine steps light part of a bar.
 - Brightness keys act on the external display the pointer is on. With the pointer on the built-in
   display, an Apple display or a display without DDC (or off every screen), the key is passed
   through to macOS.
 - Volume and mute keys are only taken over while the Mac's sound output is a display
-  (HDMI/DisplayPort/USB-C). With speakers, headphones or a Studio Display selected, they work as usual.
+  (HDMI/DisplayPort/USB-C), and act on that display. With speakers, headphones or a Studio Display
+  selected, they work as usual.
 - `⌥ Option` alone with a brightness key is left to macOS (it opens Displays settings), which is why
   fine steps need both modifiers — the same shortcut macOS uses for its own displays.
 

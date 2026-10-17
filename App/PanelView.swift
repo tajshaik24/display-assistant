@@ -132,7 +132,14 @@ private struct SettingsSection: View {
             }
             .toggleStyle(SettingSwitchStyle())
             .onChange(of: launchesAtLogin) { _, enabled in
-                do { try LoginItem.setEnabled(enabled) } catch { launchesAtLogin = LoginItem.isEnabled }
+                guard enabled != (LoginItem.isEnabled || LoginItem.needsApproval) else { return }
+                do {
+                    try LoginItem.setEnabled(enabled)
+                } catch {
+                    launchesAtLogin = LoginItem.isEnabled
+                }
+                // Registered, but macOS wants the user to allow it first.
+                if enabled, LoginItem.needsApproval { LoginItem.openSettings() }
             }
         }
     }

@@ -87,6 +87,12 @@ struct ControlSlider<Accessory: View>: View {
             .accessibilityAdjustableAction { direction in
                 onChange?(value + (direction == .increment ? KeyStep.normal : -KeyStep.normal))
             }
+            // The icon is merged into this element, so its tap is offered as an action instead.
+            .accessibilityActions {
+                if let onIconTap {
+                    Button(isMuted ? "Unmute" : "Mute", action: onIconTap)
+                }
+            }
             accessory
         }
     }
@@ -120,7 +126,10 @@ private struct SegmentedTrack: View {
             .onHover { hovering in if onChange != nil { isActive = hovering } }
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { drag in onChange?(min(max(drag.location.x / width, 0), 1)) },
+                    .onChanged { drag in
+                        guard width > 0 else { return }
+                        onChange?(min(max(drag.location.x / width, 0), 1))
+                    },
                 isEnabled: onChange != nil
             )
             .animation(.snappy(duration: 0.15), value: isActive)

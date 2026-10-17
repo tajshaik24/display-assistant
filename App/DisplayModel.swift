@@ -31,12 +31,12 @@ final class DisplayModel: ObservableObject, Identifiable {
     let supportsHDR: Bool
 
     /// Called whenever the mute state changes, so it can be mirrored to Control Center.
-    var onMuteChange: ((Bool) -> Void)?
+    var onMuteChange: (() -> Void)?
     /// Called each time the display has been queried, whether or not it answered.
     var onLoad: (() -> Void)?
-    /// Called with the old and new brightness when it changes for any reason other than sync
-    /// itself: the user, a command, or (for native displays) macOS.
-    var onBrightnessChange: ((DisplayModel, Double, Double) -> Void)?
+    /// Called with the new brightness when it changes for any reason other than sync itself: the user,
+    /// a command, or (for native displays) macOS.
+    var onBrightnessChange: ((DisplayModel, Double) -> Void)?
 
     /// False for displays that answer neither way; those are left alone.
     var isControllable: Bool { !values.isEmpty }
@@ -71,15 +71,41 @@ final class DisplayModel: ObservableObject, Identifiable {
     private static let muteOn: UInt16 = 1
     private static let muteOff: UInt16 = 2
 
-    init(display: ControllableDisplay) {
+    /// A display as found, with what macOS reports about it, all read on `nativeQueue`.
+    struct Discovered: @unchecked Sendable {
+        let display: ControllableDisplay
+        let supportsHDR: Bool
+        let isHDREnabled: Bool
+        let nativeBrightness: Double?
+    }
+
+    /// Finds the connected displays. Discovery makes DisplayServices calls, so it runs on `nativeQueue`.
+    static func discover() async -> [Discovered] {
+        let names = DisplayDiscovery.screenNames()
+        return await withCheckedContinuation { continuation in
+            nativeQueue.async {
+                continuation.resume(returning: DisplayDiscovery.displays(names: names).map { display in
+                    Discovered(
+                        display: display,
+                        supportsHDR: HDRMode.isSupported(display.id),
+                        isHDREnabled: HDRMode.isEnabled(display.id),
+                        nativeBrightness: display.hasNativeBrightness ? NativeBrightness.get(display.id) : nil
+                    )
+                })
+            }
+        }
+    }
+
+    init(_ discovered: Discovered) {
+        let display = discovered.display
         id = display.id
         name = display.name
         isBuiltIn = display.isBuiltIn
         isNative = display.hasNativeBrightness
-        supportsHDR = HDRMode.isSupported(display.id)
-        isHDREnabled = HDRMode.isEnabled(display.id)
+        supportsHDR = discovered.supportsHDR
+        isHDREnabled = discovered.isHDREnabled
         writer = display.ddc.map { DDCWriter(ddc: $0, label: "DisplayAssistant.ddc.\(display.id)") }
-        if isNative { values[.brightness] = NativeBrightness.get(display.id) }
+        if isNative { values[.brightness] = discovered.nativeBrightness }
         if writer != nil {
             loadDDC()
         } else {
@@ -94,15 +120,18 @@ final class DisplayModel: ObservableObject, Identifiable {
     }
 
     /// Switching makes macOS reconfigure the display, after which the store rediscovers it.
-    func setHDR(_ enabled: Bool) {
-        guard supportsHDR, enabled != isHDREnabled, HDRMode.setEnabled(id, enabled) else { return }
+    /// - Returns: Whether HDR is now in the requested state.
+    @discardableResult
+    func setHDR(_ enabled: Bool) -> Bool {
+        guard supportsHDR else { return false }
+        guard enabled != isHDREnabled else { return true }
+        guard HDRMode.setEnabled(id, enabled) else { return false }
         isHDREnabled = enabled
+        return true
     }
 
     var screen: NSScreen? {
-        NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
-        }
+        NSScreen.screens.first { $0.displayID == id }
     }
 
     func supports(_ control: Control) -> Bool { values[control] != nil }
@@ -120,7 +149,7 @@ final class DisplayModel: ObservableObject, Identifiable {
 
         // Like macOS, touching the volume brings sound back.
         if control == .volume, isMuted, new > 0 { setMuted(false) }
-        if control == .brightness, notify, new != old { onBrightnessChange?(self, old, new) }
+        if control == .brightness, notify, new != old { onBrightnessChange?(self, new) }
     }
 
     func step(_ control: Control, by delta: Double) {
@@ -137,7 +166,7 @@ final class DisplayModel: ObservableObject, Identifiable {
             // Displays without a mute command get their volume zeroed instead.
             writer.set(.volume, to: muted ? 0 : UInt16((value(.volume) * Double(max)).rounded()))
         }
-        onMuteChange?(muted)
+        onMuteChange?()
     }
 
     /// Re-reads the display to pick up changes made outside the app (its own buttons, macOS), then calls
@@ -183,7 +212,7 @@ final class DisplayModel: ObservableObject, Identifiable {
                     let old = self.value(.brightness)
                     if abs(current - old) > Self.nativeChangeThreshold {
                         self.values[.brightness] = current
-                        self.onBrightnessChange?(self, old, current)
+                        self.onBrightnessChange?(self, current)
                     }
                 }
                 let waiters = self.nativeReadWaiters
@@ -272,13 +301,13 @@ final class DisplayModel: ObservableObject, Identifiable {
             }
             let new = Double(result.current) / Double(result.max)
             values[control] = new
-            if control == .brightness, let old { onBrightnessChange?(self, old, new) }
+            if control == .brightness, old != nil { onBrightnessChange?(self, new) }
         }
     }
 
     private func setMutedFromMonitor(_ muted: Bool) {
         guard muted != isMuted else { return }
         isMuted = muted
-        onMuteChange?(muted)
+        onMuteChange?()
     }
 }

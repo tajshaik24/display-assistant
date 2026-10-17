@@ -27,30 +27,39 @@ public enum DisplayDiscovery {
     /// Apple's own displays don't speak DDC; they are only ever controlled natively.
     private static let appleVendorID: UInt32 = 0x610
 
-    public static func displays() -> [ControllableDisplay] {
+    /// Makes DisplayServices calls, which can stall, so an app should call it off the main thread, passing
+    /// `names` read from ``screenNames()`` on the main thread first.
+    public static func displays(names: [CGDirectDisplayID: String] = screenNames()) -> [ControllableDisplay] {
         var services = externalAVServices().filter { $0.identity.vendor != appleVendorID }
-        var result: [ControllableDisplay] = []
+        let ids = onlineDisplayIDs()
+        // With HDR on, macOS takes over a third-party monitor's brightness too, but its speakers still need DDC.
+        let native = Dictionary(uniqueKeysWithValues: ids.map { ($0, NativeBrightness.canChange($0)) })
+        let candidates = ids.filter { CGDisplayIsBuiltin($0) == 0 && CGDisplayVendorNumber($0) != appleVendorID }
 
-        for id in onlineDisplayIDs() {
-            let isBuiltIn = CGDisplayIsBuiltin(id) != 0
-            // With HDR on, macOS takes over a third-party monitor's brightness too, but its speakers still need DDC.
-            let isNative = NativeBrightness.canChange(id)
-            var identity: ServiceIdentity?
-            var ddc: DDCChannel?
-            if !isBuiltIn, CGDisplayVendorNumber(id) != appleVendorID, !services.isEmpty {
-                // Prefer an exact EDID match; with a single candidate left, order is good enough. A native display
-                // (an LG UltraFine, say) may not speak DDC at all, so it only takes an exact match.
-                if let index = services.firstIndex(where: { matches($0.identity, display: id) }) ?? (isNative ? nil : 0) {
-                    let entry = services.remove(at: index)
-                    identity = entry.identity
-                    ddc = DDCChannel(service: entry.service)
-                }
+        // Exact EDID matches first, so a monitor without one can't take another's service. Leftovers then go
+        // in order, which is right whenever a single one is left. A native display (an LG UltraFine, say) may
+        // not speak DDC at all, so it only takes an exact match.
+        var assigned: [CGDirectDisplayID: (service: IOAVService, identity: ServiceIdentity)] = [:]
+        for id in candidates {
+            if let index = services.firstIndex(where: { matches($0.identity, display: id) }) {
+                assigned[id] = services.remove(at: index)
             }
-            guard isNative || ddc != nil else { continue }
-            let name = screenName(for: id) ?? identity?.name ?? (isBuiltIn ? "Built-in Display" : "External Display")
-            result.append(ControllableDisplay(id: id, name: name, isBuiltIn: isBuiltIn, hasNativeBrightness: isNative, ddc: ddc))
         }
-        return result
+        for id in candidates where assigned[id] == nil && native[id] == false && !services.isEmpty {
+            assigned[id] = services.removeFirst()
+        }
+
+        return ids.compactMap { id in
+            let isBuiltIn = CGDisplayIsBuiltin(id) != 0
+            let isNative = native[id] ?? false
+            let entry = assigned[id]
+            guard isNative || entry != nil else { return nil }
+            let name = names[id] ?? entry?.identity.name ?? (isBuiltIn ? "Built-in Display" : "External Display")
+            return ControllableDisplay(
+                id: id, name: name, isBuiltIn: isBuiltIn, hasNativeBrightness: isNative,
+                ddc: entry.map { DDCChannel(service: $0.service) }
+            )
+        }
     }
 
     /// Calls `handler` on the main queue whenever an external AV service appears. A monitor that re-links
@@ -68,10 +77,9 @@ public enum DisplayDiscovery {
         return Array(ids.prefix(Int(count)))
     }
 
-    private static func screenName(for id: CGDirectDisplayID) -> String? {
-        NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
-        }?.localizedName
+    /// The name each display's screen shows in System Settings. AppKit, so read it on the main thread.
+    public static func screenNames() -> [CGDirectDisplayID: String] {
+        Dictionary(NSScreen.screens.compactMap { screen in screen.displayID.map { ($0, screen.localizedName) } }) { first, _ in first }
     }
 
     private static func matches(_ identity: ServiceIdentity, display id: CGDirectDisplayID) -> Bool {
@@ -200,5 +208,12 @@ private final class AVServiceObserver {
             found = true
         }
         return found
+    }
+}
+
+extension NSScreen {
+    /// The Core Graphics display this screen shows.
+    public var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 }

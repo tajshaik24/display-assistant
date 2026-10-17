@@ -37,8 +37,6 @@ final class MediaKeyTap {
         AXIsProcessTrustedWithOptions(options)
     }
 
-    var isRunning: Bool { tap != nil }
-
     @discardableResult
     func start() -> Bool {
         guard tap == nil else { return true }

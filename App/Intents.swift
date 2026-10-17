@@ -6,12 +6,14 @@ import AppIntents
 enum DisplayIntentError: Error, CustomLocalizedStringResourceConvertible {
     case noDisplay(DisplayModel.Control)
     case noHDR
+    case hdrFailed
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .noDisplay(.brightness): "No connected display supports brightness control."
         case .noDisplay(.volume): "No connected display supports volume control."
         case .noHDR: "No connected display supports HDR."
+        case .hdrFailed: "macOS didn't switch HDR."
         }
     }
 }
@@ -131,7 +133,8 @@ struct SetHDRIntent: AppIntent {
         case .turnOff: false
         case .toggle: !displays[0].isHDREnabled
         }
-        for display in displays { display.setHDR(enabled) }
+        let switched = displays.map { $0.setHDR(enabled) }
+        guard switched.contains(true) else { throw DisplayIntentError.hdrFailed }
         return .result(dialog: enabled ? "HDR turned on." : "HDR turned off.")
     }
 }
