@@ -79,7 +79,7 @@ private struct DisplaySection: View {
                     value: display.value(.volume),
                     isMuted: display.isMuted,
                     onChange: { display.set(.volume, to: $0) },
-                    onMinimumIconTap: { display.setMuted(!display.isMuted) }
+                    onIconTap: { display.setMuted(!display.isMuted) }
                 )
                 .modifier(ModuleBackground())
             }

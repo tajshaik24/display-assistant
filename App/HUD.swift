@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// The on-screen indicator shown for keyboard and Control Center changes,
-/// placed under the menu bar like the system's own.
+/// The on-screen indicator shown for keyboard and Control Center changes, in the same place as the
+/// system's own.
 @MainActor
 final class HUD {
     static let shared = HUD()
@@ -10,8 +10,11 @@ final class HUD {
     private let state = HUDState()
     private var hideTask: Task<Void, Never>?
 
-    private static let size = CGSize(width: 262, height: 78)
-    private static let margin: CGFloat = 10
+    // The system indicator's place, measured on screen: a 308 × 66 pill whose right edge is 17.5 points
+    // from the screen's and whose top is 10 points under the menu bar. The panel adds 4 on every side.
+    private static let size = CGSize(width: 316, height: 74)
+    private static let rightInset: CGFloat = 13.5
+    private static let topInset: CGFloat = 6
 
     private lazy var panel: NSPanel = {
         let panel = NSPanel(
@@ -35,11 +38,10 @@ final class HUD {
         state.control = control
         state.display = display
 
-        let screen = display.screen ?? NSScreen.main
-        if let frame = screen?.visibleFrame {
+        if let screen = display.screen ?? NSScreen.main {
             panel.setFrameOrigin(CGPoint(
-                x: frame.maxX - Self.size.width - Self.margin,
-                y: frame.maxY - Self.size.height - Self.margin
+                x: screen.frame.maxX - Self.size.width - Self.rightInset,
+                y: screen.visibleFrame.maxY - Self.size.height - Self.topInset
             ))
         }
         panel.orderFrontRegardless()
@@ -81,7 +83,7 @@ private struct HUDView: View {
     }
 }
 
-/// A small read-only Control Center module, like the system's own indicator.
+/// A read-only pill of icon and segmented track, like the system's own indicator.
 private struct HUDContent: View {
     @ObservedObject var display: DisplayModel
     let control: DisplayModel.Control
@@ -91,13 +93,13 @@ private struct HUDContent: View {
             control: control,
             value: display.value(control),
             isMuted: control == .volume && display.isMuted,
-            showsValue: false
+            style: .indicator
         )
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 11)
+        // The system's layout: icon 20.5 points in, track from 62.5 to 31.5 points short of the end.
+        .padding(.leading, 20.5)
+        .padding(.trailing, 31.5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .glassEffect(.clear, in: .capsule)
         .padding(4)
     }
 }

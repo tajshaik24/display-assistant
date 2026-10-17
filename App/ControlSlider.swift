@@ -16,23 +16,33 @@ extension DisplayModel.Control {
         }
     }
 
-    var minimumSymbol: String {
+    /// The leading icon, which follows the level like the system's indicator: the speaker gains a wave
+    /// per third, the sun grows its rays past half.
+    func symbol(for value: Double, isMuted: Bool) -> String {
         switch self {
-        case .brightness: "sun.min.fill"
-        case .volume: "speaker.fill"
-        }
-    }
-
-    var maximumSymbol: String {
-        switch self {
-        case .brightness: "sun.max.fill"
-        case .volume: "speaker.wave.3.fill"
+        case .brightness: value < 0.5 ? "sun.min.fill" : "sun.max.fill"
+        case .volume where isMuted: "speaker.slash.fill"
+        case .volume:
+            switch value {
+            case ..<0.01: "speaker.fill"
+            case ..<(1.0 / 3): "speaker.wave.1.fill"
+            case ..<(2.0 / 3): "speaker.wave.2.fill"
+            default: "speaker.wave.3.fill"
+            }
         }
     }
 }
 
-/// The inside of a Control Center style module: a heading, then a thin neutral track between a small
-/// and a large icon, and optionally extra controls below. Whoever places it gives it its background.
+enum ControlSliderStyle {
+    /// A card in the panel: a heading over the icon and the track.
+    case module
+    /// The on-screen indicator: a larger white icon and a hairline track, nothing else.
+    case indicator
+}
+
+/// The inside of a Control Center style module: a heading, then an icon beside a segmented track like
+/// the system's volume and brightness indicator, and optionally extra controls below. Whoever places it
+/// gives it its background.
 struct ControlSlider<Accessory: View>: View {
     let control: DisplayModel.Control
     let value: Double
@@ -40,47 +50,37 @@ struct ControlSlider<Accessory: View>: View {
     var isMuted = false
     /// Nil for a read-only module, like the on-screen indicator's.
     var onChange: ((Double) -> Void)?
-    var onMinimumIconTap: (() -> Void)?
-    var showsValue = true
+    var onIconTap: (() -> Void)?
+    var style = ControlSliderStyle.module
     @ViewBuilder var accessory: Accessory
-
-    @State private var isDragging = false
-    @State private var isHovering = false
-    @Environment(\.colorScheme) private var colorScheme
-
-    private static var trackHeight: CGFloat { 6 }
-    private static var hitHeight: CGFloat { 22 }
-    private static var knobSize: CGFloat { 16 }
 
     private var shownValue: Double { isMuted ? 0 : value }
     private var valueText: String { isMuted ? "Muted" : "\(Int((value * 100).rounded()))%" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(control.moduleTitle).font(.system(size: 12, weight: .semibold))
-                Spacer()
-                if showsValue {
+            if style == .module {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(control.moduleTitle).font(.system(size: 12, weight: .semibold))
+                    Spacer()
                     Text(valueText)
                         .font(.system(size: 11))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack(spacing: 10) {
-                Image(systemName: isMuted ? "speaker.slash.fill" : control.minimumSymbol)
-                    .font(.system(size: 11, weight: .medium))
+            HStack(spacing: style == .module ? 12 : 14) {
+                Image(systemName: control.symbol(for: value, isMuted: isMuted))
+                    .font(.system(size: style == .module ? 15 : 22, weight: .medium))
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 16, height: Self.hitHeight)
+                    .frame(width: style == .module ? 22 : 28, height: SegmentedTrack.hitHeight)
                     .contentShape(Rectangle())
-                    .onTapGesture { onMinimumIconTap?() }
-                    .allowsHitTesting(onMinimumIconTap != nil)
-                track
-                Image(systemName: control.maximumSymbol)
-                    .font(.system(size: 14, weight: .medium))
-                    .frame(width: 22, height: Self.hitHeight)
+                    .onTapGesture { onIconTap?() }
+                    .allowsHitTesting(onIconTap != nil)
+                SegmentedTrack(value: shownValue, style: style, onChange: onChange)
+                    .animation(.snappy(duration: 0.2), value: isMuted)
             }
-            .foregroundStyle(.primary.opacity(0.72))
+            .foregroundStyle(style == .module ? AnyShapeStyle(.primary.opacity(0.8)) : AnyShapeStyle(.white))
             .accessibilityElement()
             .accessibilityLabel(control.title)
             .accessibilityValue(isMuted ? "Muted" : "\(Int((value * 100).rounded())) percent")
@@ -90,43 +90,81 @@ struct ControlSlider<Accessory: View>: View {
             accessory
         }
     }
+}
 
-    private var track: some View {
+/// A row of short bars, one per key press, lit from the left. A value between steps lights part of a bar,
+/// so fine (⌥⇧) steps still show. Dragging anywhere on it sets the value.
+private struct SegmentedTrack: View {
+    let value: Double
+    let style: ControlSliderStyle
+    let onChange: ((Double) -> Void)?
+
+    @State private var isActive = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    static let hitHeight: CGFloat = 22
+    private static let segments = Int((1 / KeyStep.normal).rounded())
+
+    var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            // The knob travels inside the track, so the fill ends exactly where the value is.
-            let knobX = Self.knobSize / 2 + (width - Self.knobSize) * shownValue
-            ZStack(alignment: .leading) {
-                Capsule().fill(.primary.opacity(0.13))
-                    .frame(height: Self.trackHeight)
-                // An explicit color: semantic styles are rendered vibrant (and much dimmer) inside glass.
-                Capsule().fill(colorScheme == .dark ? Color.white : Color.black.opacity(0.78))
-                    .frame(width: shownValue == 0 ? 0 : knobX, height: Self.trackHeight)
-                if onChange != nil {
-                    Circle().fill(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                        .frame(width: Self.knobSize, height: Self.knobSize)
-                        .offset(x: knobX - Self.knobSize / 2)
-                        .opacity(isDragging || isHovering ? 1 : 0)
-                }
+            // Thickens under the pointer, as the hint that it can be dragged.
+            let height: CGFloat = style == .indicator ? 4 : isActive ? 7 : 5
+            ZStack {
+                Segments(count: Self.segments, value: 1).fill(unlit)
+                Segments(count: Self.segments, value: value).fill(lit)
             }
-            .frame(height: Self.hitHeight)
+            .frame(height: height)
+            .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .onHover { isHovering = $0 }
+            .onHover { hovering in if onChange != nil { isActive = hovering } }
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        isDragging = true
-                        onChange?((drag.location.x - Self.knobSize / 2) / (width - Self.knobSize))
-                    }
-                    .onEnded { _ in isDragging = false },
+                    .onChanged { drag in onChange?(min(max(drag.location.x / width, 0), 1)) },
                 isEnabled: onChange != nil
             )
-            .animation(.snappy(duration: 0.15), value: isDragging || isHovering)
-            .animation(.snappy(duration: 0.2), value: isMuted)
-            .animation(.snappy(duration: 0.18), value: shownValue)
+            .animation(.snappy(duration: 0.15), value: isActive)
+            .animation(.snappy(duration: 0.18), value: value)
         }
         .frame(height: Self.hitHeight)
+    }
+
+    // Explicit colors: semantic styles are rendered vibrant (and much dimmer) inside glass. The indicator
+    // is always white on its glass, like the system's.
+    private var lit: Color {
+        style == .indicator || colorScheme == .dark ? .white : .black.opacity(0.78)
+    }
+
+    private var unlit: Color {
+        style == .indicator ? .white.opacity(0.3) : colorScheme == .dark ? .white.opacity(0.14) : .black.opacity(0.1)
+    }
+}
+
+/// `count` rounded bars with small gaps between them, filled up to `value`.
+private struct Segments: Shape {
+    let count: Int
+    var value: Double
+
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let gap: CGFloat = 1
+        let width = (rect.width - gap * CGFloat(count - 1)) / CGFloat(count)
+        let radius = min(rect.height / 2, 1)
+        var path = Path()
+        for index in 0..<count {
+            let lit = min(max(value * Double(count) - Double(index), 0), 1)
+            guard lit > 0 else { break }
+            let segment = CGRect(
+                x: rect.minX + CGFloat(index) * (width + gap), y: rect.minY,
+                width: width * lit, height: rect.height
+            )
+            path.addRoundedRect(in: segment, cornerSize: CGSize(width: radius, height: radius))
+        }
+        return path
     }
 }
 
@@ -136,12 +174,12 @@ extension ControlSlider where Accessory == EmptyView {
         value: Double,
         isMuted: Bool = false,
         onChange: ((Double) -> Void)? = nil,
-        onMinimumIconTap: (() -> Void)? = nil,
-        showsValue: Bool = true
+        onIconTap: (() -> Void)? = nil,
+        style: ControlSliderStyle = .module
     ) {
         self.init(
             control: control, value: value, isMuted: isMuted, onChange: onChange,
-            onMinimumIconTap: onMinimumIconTap, showsValue: showsValue, accessory: { EmptyView() }
+            onIconTap: onIconTap, style: style, accessory: { EmptyView() }
         )
     }
 }
