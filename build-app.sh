@@ -123,7 +123,7 @@ fi
 
 # A unique, increasing build number for every build. The system caches the extension's
 # Control Center controls per version, so without this, added or changed controls never show up.
-BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 
 # --- Build ---
 if [[ "$BUILD_CONFIG" == "debug" ]]; then CONFIGURATION="Debug"; else CONFIGURATION="Release"; fi

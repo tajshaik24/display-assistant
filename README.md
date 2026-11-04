@@ -96,9 +96,8 @@ Launch at Login switches itself on.
 ### Updates
 
 Updates come through [Sparkle](https://sparkle-project.org). Choose **Check for Updates…** in the panel
-to check now; the app also checks once a day. An update found in the background doesn't pop up a window:
-the item turns into **Update to 1.x…** with a dot. Updates are signed (EdDSA and Developer ID) and
-verified before they're installed.
+to check now; the app also checks once a day and shows Sparkle's update window when a release is out.
+Updates are signed (EdDSA and Developer ID) and verified before they're installed.
 
 ## Development
 

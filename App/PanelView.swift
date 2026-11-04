@@ -180,20 +180,13 @@ private struct MenuFooter: View {
     }
 }
 
-/// "Check for Updates…", which opens Sparkle's update window. An update found in the background
-/// shows here as "Update to 1.x…" with a dot, rather than as a window popping up.
+/// "Check for Updates…", which hands over to Sparkle's update window.
 private struct UpdateMenuItem: View {
     @ObservedObject var updater: Updater
 
     var body: some View {
-        MenuItem(title: updater.pendingVersion.map { "Update to \($0)…" } ?? "Check for Updates…") {
-            updater.checkForUpdates()
-        } trailing: {
-            if updater.pendingVersion != nil {
-                Circle().fill(.tint).frame(width: 7, height: 7)
-            }
-        }
-        .disabled(!updater.canCheckForUpdates)
+        MenuItem(title: "Check for Updates…") { updater.checkForUpdates() }
+            .disabled(!updater.canCheckForUpdates)
     }
 }
 
