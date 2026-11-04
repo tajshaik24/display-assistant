@@ -4,7 +4,8 @@ set -euo pipefail
 # Build "Display Assistant.app" (the app plus its Control Center extension).
 # Usage: ./build-app.sh [release|debug] [--identity IDENTITY] [--install] [--notarize] [--notes FILE] [--keychain-profile NAME]
 #
-# Code signing: Auto-detects an "Apple Development" identity for stable TCC permissions.
+# Code signing: Auto-detects a "Developer ID Application" identity (what releases use), falling back to
+# "Apple Development", so the Accessibility permission survives rebuilds and Sparkle updates.
 # Use --identity to override (e.g. --identity "-" for ad-hoc, or a specific identity name).
 # Use --install to copy the built app to /Applications/ and relaunch it.
 #
@@ -84,7 +85,7 @@ if ! command -v xcodegen > /dev/null 2>&1; then
 fi
 
 # --- Signing identity ---
-# Extra xcodebuild settings; empty means "use what project.yml says" (Apple Development, team LDUCPMFSMH).
+# Extra xcodebuild settings; empty means "use what project.yml says" (Apple Development).
 SIGN_SETTINGS=()
 if [[ -z "$SIGN_IDENTITY" ]]; then
     # Prefer Developer ID, the identity releases use: macOS ties the Accessibility permission to the

@@ -29,8 +29,8 @@ With HDR on, macOS takes over a DDC monitor's brightness. The app then sets brig
 (the panel slider and brightness keys keep working) while volume and mute still go over DDC.
 
 In the panel, click the speaker icon at the left of the **Sound** slider to mute, and the **HDR**
-button under the **Display** slider to switch HDR. **Displays Settings…** and **Quit** sit at the
-bottom, like the system's own menu bar panels.
+button under the **Display** slider to switch HDR. **Displays Settings…**, **Check for Updates…** and
+**Quit** sit at the bottom, like the system's own menu bar panels.
 
 ## Keyboard
 
@@ -84,8 +84,6 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 Download the latest build from [Releases](https://github.com/tajshaik24/display-assistant/releases),
 unzip it and move **Display Assistant.app** to `/Applications`. Requires macOS 26 or later.
 
-Releases are signed with a Developer ID and notarized by Apple, so the app opens normally.
-
 Then, on each Mac (permissions don't carry over between machines):
 
 1. Open the panel from the menu bar and press **Enable** to grant Accessibility access for the keyboard keys.
@@ -97,7 +95,6 @@ Launch at Login switches itself on.
 
 Updates come through [Sparkle](https://sparkle-project.org). Choose **Check for Updates…** in the panel
 to check now; the app also checks once a day and shows Sparkle's update window when a release is out.
-Updates are signed (EdDSA and Developer ID) and verified before they're installed.
 
 ## Development
 
@@ -107,27 +104,6 @@ Requires Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew inst
 ./build-app.sh --install   # build, install to /Applications and relaunch any running copy
 ./build-app.sh             # release build only (build/Build/Products/Release/)
 ./build-app.sh debug       # debug build
-```
-
-By default the script signs with your **Developer ID Application** identity if you have one (the one
-releases use), otherwise **Apple Development**. Matching the releases keeps the Accessibility permission
-when a local build and a Sparkle update replace each other; it is tied to the signature. `--install` is
-for trying unreleased changes; to ship them, make a release and let Sparkle install it. Pass `--identity "-"` for ad-hoc signing or
-`--identity "NAME"` to choose a specific certificate. The signing team is set in `project.yml`, and the
-matching app group in `Shared/Shared.swift`.
-
-`./build-app.sh release --notarize --notes NOTES.md` signs with a **Developer ID Application**
-certificate, submits the app to Apple's notary service with the App Store Connect API key in
-`~/.appstoreconnect/`, and staples the ticket. It produces `build/DisplayAssistant-<version>.zip` and
-`build/appcast.xml`: the Sparkle feed, with the zip signed by the EdDSA key in the login keychain
-(account `display-assistant`) and `NOTES.md` as the release notes. Bump `MARKETING_VERSION` in
-`project.yml`, then attach both files to a release tagged `v<version>`; installed copies read the
-appcast from the latest release:
-
-```bash
-./build-app.sh release --notarize --notes NOTES.md
-gh release create v1.12 build/DisplayAssistant-1.12.zip build/appcast.xml \
-    --title "Display Assistant 1.12" --notes-file NOTES.md
 ```
 
 After the first install, grant Accessibility access and add the controls as described under
