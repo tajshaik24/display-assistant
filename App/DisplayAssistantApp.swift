@@ -36,5 +36,6 @@ final class Services {
         store = .shared
         keyboard = KeyboardController(store: store)
         LoginItem.enableOnFirstLaunch()
+        Updater.shared.startAutomaticChecks()
     }
 }

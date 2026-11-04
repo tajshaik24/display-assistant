@@ -11,11 +11,10 @@ set -euo pipefail
 # Notarization (--notarize): signs with a "Developer ID Application" certificate
 # (requires a paid Apple Developer Program membership), submits the app to Apple's
 # notary service, then staples the ticket so it opens without Gatekeeper warnings.
-# Credentials are read from a notarytool keychain profile (default: "DisplayAssistantNotary").
-# Create it once with:
-#   xcrun notarytool store-credentials "DisplayAssistantNotary" \
-#     --apple-id tajshaik24@gmail.com --team-id LDUCPMFSMH --password <app-specific-password>
-# Override the profile name with --keychain-profile NAME.
+# Credentials: an App Store Connect API key described by ~/.appstoreconnect/config.json
+# (keyID, issuerID, and the key at ~/.appstoreconnect/private_keys/AuthKey_<keyID>.p8).
+# Alternatively pass --keychain-profile NAME to use a profile made with `xcrun notarytool store-credentials`.
+# The result, build/DisplayAssistant-<version>.zip, is the asset the in-app updater downloads.
 #
 # Requires Xcode and XcodeGen (brew install xcodegen). The app has an app extension,
 # so it is built with xcodebuild rather than Swift Package Manager alone.
@@ -24,7 +23,7 @@ BUILD_CONFIG="${1:-release}"
 SIGN_IDENTITY=""
 INSTALL=false
 NOTARIZE=false
-KEYCHAIN_PROFILE="DisplayAssistantNotary"
+KEYCHAIN_PROFILE=""
 
 # Parse optional flags
 [[ $# -gt 0 && "$1" != --* ]] && shift
@@ -139,14 +138,27 @@ echo ""
 # --- Notarize ---
 # Runs before --install so the installed copy is stapled.
 if [[ "$NOTARIZE" == true ]]; then
-    NOTARY_ZIP="$OUTPUT_DIR/DisplayAssistant.zip"
+    VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_BUNDLE/Contents/Info.plist")
+    NOTARY_ZIP="$OUTPUT_DIR/DisplayAssistant-$VERSION.zip"
+    if [[ -n "$KEYCHAIN_PROFILE" ]]; then
+        NOTARY_AUTH=(--keychain-profile "$KEYCHAIN_PROFILE")
+    else
+        ASC_CONFIG="$HOME/.appstoreconnect/config.json"
+        if [[ ! -f "$ASC_CONFIG" ]]; then
+            echo "Error: no notary credentials. Create $ASC_CONFIG or pass --keychain-profile NAME."
+            exit 1
+        fi
+        ASC_KEY_ID=$(plutil -extract keyID raw "$ASC_CONFIG")
+        ASC_ISSUER=$(plutil -extract issuerID raw "$ASC_CONFIG")
+        NOTARY_AUTH=(--key "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER")
+    fi
 
     echo "Zipping app for notarization..."
     rm -f "$NOTARY_ZIP"
     ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ZIP"
 
-    echo "Submitting to Apple notary service (profile: $KEYCHAIN_PROFILE)..."
-    xcrun notarytool submit "$NOTARY_ZIP" --keychain-profile "$KEYCHAIN_PROFILE" --wait
+    echo "Submitting to Apple notary service..."
+    xcrun notarytool submit "$NOTARY_ZIP" "${NOTARY_AUTH[@]}" --wait
 
     echo "Stapling ticket to app bundle..."
     xcrun stapler staple "$APP_BUNDLE"

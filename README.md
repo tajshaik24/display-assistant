@@ -84,25 +84,21 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 Download the latest build from [Releases](https://github.com/tajshaik24/display-assistant/releases),
 unzip it and move **Display Assistant.app** to `/Applications`. Requires macOS 26 or later.
 
-Builds are signed but not notarized, so macOS blocks the first launch of a downloaded copy. Clear that
-once, either way:
-
-- **Terminal (quickest):** after moving the app to `/Applications`, run
-
-  ```bash
-  xattr -dr com.apple.quarantine "/Applications/Display Assistant.app"
-  ```
-
-  This removes the quarantine flag your browser put on the download; the app then opens normally.
-- **No Terminal:** open the app once, let macOS block it, then choose System Settings →
-  Privacy & Security → **Open Anyway**.
+Releases are signed with a Developer ID and notarized by Apple, so the app opens normally.
 
 Then, on each Mac (permissions don't carry over between machines):
 
 1. Open the panel from the menu bar and press **Enable** to grant Accessibility access for the keyboard keys.
 2. Optional: Control Center → Edit Controls → search for "Display".
 
-Launch at Login switches itself on. Building from source (below) avoids the Gatekeeper step entirely.
+Launch at Login switches itself on.
+
+### Updates
+
+The app checks GitHub for a new release shortly after launch and once a day. When one is found, the
+panel's **Check for Updates…** item turns into **Update to 1.x…**; choose it to read the release notes
+and install. The update is downloaded, checked to be signed by the same developer and newer than the
+running copy, then swapped in place and relaunched. Choose **Check for Updates…** to check right away.
 
 ## Development
 
@@ -120,9 +116,14 @@ Accessibility permission stable across rebuilds. Pass `--identity "-"` for ad-ho
 matching app group in `Shared/Shared.swift`.
 
 `./build-app.sh release --notarize` signs with a **Developer ID Application** certificate, submits the
-app to Apple's notary service and staples the ticket, producing `build/DisplayAssistant.zip` for a
-release that opens without a Gatekeeper warning. See the header of `build-app.sh` for the one-time
-`notarytool` credentials setup.
+app to Apple's notary service with the App Store Connect API key in `~/.appstoreconnect/` and staples
+the ticket, producing `build/DisplayAssistant-<version>.zip`. Attach that zip to a GitHub release tagged
+`v<version>` (bump `MARKETING_VERSION` in `project.yml` first) and installed copies offer it as an update:
+
+```bash
+./build-app.sh release --notarize
+gh release create v1.11 build/DisplayAssistant-1.11.zip --title "Display Assistant 1.11" --notes-file NOTES.md
+```
 
 After the first install, grant Accessibility access and add the controls as described under
 [Install](#install).
