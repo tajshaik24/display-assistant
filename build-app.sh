@@ -106,8 +106,9 @@ elif [[ -n "$SIGN_IDENTITY" ]]; then
     SIGN_SETTINGS=(CODE_SIGN_IDENTITY="$SIGN_IDENTITY")
 fi
 if [[ "$NOTARIZE" == true ]]; then
-    # The notary service rejects signatures without a secure timestamp.
-    SIGN_SETTINGS+=(OTHER_CODE_SIGN_FLAGS=--timestamp)
+    # The notary service rejects signatures without a secure timestamp, and executables that allow
+    # debugging (Xcode adds the get-task-allow entitlement unless told not to).
+    SIGN_SETTINGS+=(OTHER_CODE_SIGN_FLAGS=--timestamp CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
 fi
 
 # A unique, increasing build number for every build. The system caches the extension's
@@ -158,7 +159,14 @@ if [[ "$NOTARIZE" == true ]]; then
     ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ZIP"
 
     echo "Submitting to Apple notary service..."
-    xcrun notarytool submit "$NOTARY_ZIP" "${NOTARY_AUTH[@]}" --wait
+    # notarytool exits 0 even when Apple rejects the app, so check the status it reports.
+    NOTARY_OUTPUT=$(xcrun notarytool submit "$NOTARY_ZIP" "${NOTARY_AUTH[@]}" --wait 2>&1 | tee /dev/stderr)
+    if ! grep -q "status: Accepted" <<< "$NOTARY_OUTPUT"; then
+        SUBMISSION_ID=$(grep -m1 -E "^ *id: " <<< "$NOTARY_OUTPUT" | awk '{print $2}')
+        echo "Error: notarization was not accepted. See why with:"
+        echo "  xcrun notarytool log $SUBMISSION_ID ${NOTARY_AUTH[*]}"
+        exit 1
+    fi
 
     echo "Stapling ticket to app bundle..."
     xcrun stapler staple "$APP_BUNDLE"
