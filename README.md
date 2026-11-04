@@ -109,8 +109,10 @@ Requires Xcode 27, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew inst
 ./build-app.sh debug       # debug build
 ```
 
-By default the script signs with your **Apple Development** identity (auto-detected), which keeps the
-Accessibility permission stable across rebuilds. Pass `--identity "-"` for ad-hoc signing or
+By default the script signs with your **Developer ID Application** identity if you have one (the one
+releases use), otherwise **Apple Development**. Matching the releases keeps the Accessibility permission
+when a local build and a Sparkle update replace each other; it is tied to the signature. `--install` is
+for trying unreleased changes; to ship them, make a release and let Sparkle install it. Pass `--identity "-"` for ad-hoc signing or
 `--identity "NAME"` to choose a specific certificate. The signing team is set in `project.yml`, and the
 matching app group in `Shared/Shared.swift`.
 

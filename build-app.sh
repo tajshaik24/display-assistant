@@ -87,17 +87,18 @@ fi
 # Extra xcodebuild settings; empty means "use what project.yml says" (Apple Development, team LDUCPMFSMH).
 SIGN_SETTINGS=()
 if [[ -z "$SIGN_IDENTITY" ]]; then
-    if [[ "$NOTARIZE" == true ]]; then
-        # `|| true` so set -e doesn't abort before the friendly error below when grep finds nothing
-        DETECTED=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -1 | awk '{print $2}' || true)
-        if [[ -z "$DETECTED" ]]; then
-            echo "Error: --notarize requires a 'Developer ID Application' certificate, but none was found."
-            echo "       That certificate is only issued to paid Apple Developer Program members."
-            echo "       Create one in Xcode > Settings > Accounts (or developer.apple.com), then re-run."
-            exit 1
-        fi
+    # Prefer Developer ID, the identity releases use: macOS ties the Accessibility permission to the
+    # signature, so a local build signed differently from the updates Sparkle installs would make it
+    # ask for Accessibility again every time one replaced the other.
+    # `|| true` so set -e doesn't abort when grep finds nothing.
+    DETECTED=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -1 | awk '{print $2}' || true)
+    if [[ -n "$DETECTED" ]]; then
         SIGN_IDENTITY="Developer ID Application"
         echo "Using Developer ID signing identity: $DETECTED"
+    elif [[ "$NOTARIZE" == true ]]; then
+        echo "Error: --notarize requires a 'Developer ID Application' certificate, but none was found."
+        echo "       Only the Account Holder can create it: Xcode > Settings > Accounts > Manage Certificates."
+        exit 1
     else
         DETECTED=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | awk '{print $2}' || true)
         if [[ -n "$DETECTED" ]]; then
@@ -139,9 +140,10 @@ if [[ ! -d "$APP_BUNDLE" ]]; then
     echo "Error: could not find built app at $APP_BUNDLE"
     exit 1
 fi
-if [[ "$NOTARIZE" == true ]]; then
+if [[ "$SIGN_IDENTITY" == "Developer ID Application" ]]; then
     # Xcode signs Sparkle.framework but not the helpers inside it, which keep Sparkle's ad-hoc
-    # signatures; notarization needs every executable signed with Developer ID and a timestamp.
+    # signatures; notarization needs every executable signed with Developer ID and a timestamp,
+    # and local builds get the same treatment so they match releases exactly.
     # Inside out, as Sparkle's documentation describes, then the app again to seal the new framework.
     SPARKLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
     SIGN=(codesign --force --sign "Developer ID Application" --options runtime --timestamp)
@@ -216,7 +218,11 @@ if [[ "$NOTARIZE" == true ]]; then
     MIN_SYSTEM=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_BUNDLE/Contents/Info.plist")
     RELEASE_URL="https://github.com/tajshaik24/display-assistant/releases"
     NOTES=""
-    if [[ -n "$NOTES_FILE" ]]; then NOTES=$(cat "$NOTES_FILE"); fi
+    if [[ -n "$NOTES_FILE" ]]; then
+        NOTES=$(cat "$NOTES_FILE")
+    else
+        echo "Warning: no --notes FILE, so Sparkle's update window will show no release notes."
+    fi
     cat > "$OUTPUT_DIR/appcast.xml" <<APPCAST
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
