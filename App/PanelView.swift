@@ -180,40 +180,20 @@ private struct MenuFooter: View {
     }
 }
 
-/// "Check for Updates…", which turns into "Update to 1.x…" once a newer release is found.
+/// "Check for Updates…", which opens Sparkle's update window. An update found in the background
+/// shows here as "Update to 1.x…" with a dot, rather than as a window popping up.
 private struct UpdateMenuItem: View {
     @ObservedObject var updater: Updater
 
     var body: some View {
-        MenuItem(title: title) {
-            if case .available(let release) = updater.state {
-                updater.promptToInstall(release)
-            } else {
-                Task { await updater.check(userInitiated: true) }
-            }
+        MenuItem(title: updater.pendingVersion.map { "Update to \($0)…" } ?? "Check for Updates…") {
+            updater.checkForUpdates()
         } trailing: {
-            switch updater.state {
-            case .checking, .installing:
-                ProgressView().controlSize(.mini)
-            case .upToDate:
-                Text("Up to date").foregroundStyle(.secondary)
-            case .failed(let message):
-                Text(message).foregroundStyle(.secondary).lineLimit(1)
-            case .available:
+            if updater.pendingVersion != nil {
                 Circle().fill(.tint).frame(width: 7, height: 7)
-            case .idle:
-                EmptyView()
             }
         }
-        .disabled(updater.state == .checking || updater.state == .installing)
-    }
-
-    private var title: String {
-        switch updater.state {
-        case .available(let release): "Update to \(release.version)…"
-        case .installing: "Installing Update…"
-        default: "Check for Updates…"
-        }
+        .disabled(!updater.canCheckForUpdates)
     }
 }
 

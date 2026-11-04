@@ -95,10 +95,10 @@ Launch at Login switches itself on.
 
 ### Updates
 
-The app checks GitHub for a new release shortly after launch and once a day. When one is found, the
-panel's **Check for Updates…** item turns into **Update to 1.x…**; choose it to read the release notes
-and install. The update is downloaded, checked to be signed by the same developer and newer than the
-running copy, then swapped in place and relaunched. Choose **Check for Updates…** to check right away.
+Updates come through [Sparkle](https://sparkle-project.org). Choose **Check for Updates…** in the panel
+to check now; the app also checks once a day. An update found in the background doesn't pop up a window:
+the item turns into **Update to 1.x…** with a dot. Updates are signed (EdDSA and Developer ID) and
+verified before they're installed.
 
 ## Development
 
@@ -115,14 +115,18 @@ Accessibility permission stable across rebuilds. Pass `--identity "-"` for ad-ho
 `--identity "NAME"` to choose a specific certificate. The signing team is set in `project.yml`, and the
 matching app group in `Shared/Shared.swift`.
 
-`./build-app.sh release --notarize` signs with a **Developer ID Application** certificate, submits the
-app to Apple's notary service with the App Store Connect API key in `~/.appstoreconnect/` and staples
-the ticket, producing `build/DisplayAssistant-<version>.zip`. Attach that zip to a GitHub release tagged
-`v<version>` (bump `MARKETING_VERSION` in `project.yml` first) and installed copies offer it as an update:
+`./build-app.sh release --notarize --notes NOTES.md` signs with a **Developer ID Application**
+certificate, submits the app to Apple's notary service with the App Store Connect API key in
+`~/.appstoreconnect/`, and staples the ticket. It produces `build/DisplayAssistant-<version>.zip` and
+`build/appcast.xml`: the Sparkle feed, with the zip signed by the EdDSA key in the login keychain
+(account `display-assistant`) and `NOTES.md` as the release notes. Bump `MARKETING_VERSION` in
+`project.yml`, then attach both files to a release tagged `v<version>`; installed copies read the
+appcast from the latest release:
 
 ```bash
-./build-app.sh release --notarize
-gh release create v1.11 build/DisplayAssistant-1.11.zip --title "Display Assistant 1.11" --notes-file NOTES.md
+./build-app.sh release --notarize --notes NOTES.md
+gh release create v1.12 build/DisplayAssistant-1.12.zip build/appcast.xml \
+    --title "Display Assistant 1.12" --notes-file NOTES.md
 ```
 
 After the first install, grant Accessibility access and add the controls as described under

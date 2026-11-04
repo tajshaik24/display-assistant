@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Build "Display Assistant.app" (the app plus its Control Center extension).
-# Usage: ./build-app.sh [release|debug] [--identity IDENTITY] [--install] [--notarize] [--keychain-profile NAME]
+# Usage: ./build-app.sh [release|debug] [--identity IDENTITY] [--install] [--notarize] [--notes FILE] [--keychain-profile NAME]
 #
 # Code signing: Auto-detects an "Apple Development" identity for stable TCC permissions.
 # Use --identity to override (e.g. --identity "-" for ad-hoc, or a specific identity name).
@@ -14,7 +14,12 @@ set -euo pipefail
 # Credentials: an App Store Connect API key described by ~/.appstoreconnect/config.json
 # (keyID, issuerID, and the key at ~/.appstoreconnect/private_keys/AuthKey_<keyID>.p8).
 # Alternatively pass --keychain-profile NAME to use a profile made with `xcrun notarytool store-credentials`.
-# The result, build/DisplayAssistant-<version>.zip, is the asset the in-app updater downloads.
+#
+# Updates (Sparkle): a notarized build also writes build/appcast.xml, with the zip signed by the
+# Sparkle EdDSA key in the login keychain (account "display-assistant"; public key in project.yml).
+# --notes FILE puts that Markdown file in the appcast as the release notes Sparkle shows.
+# Attach both build/DisplayAssistant-<version>.zip and build/appcast.xml to the GitHub release;
+# the app reads the appcast from the latest release.
 #
 # Requires Xcode and XcodeGen (brew install xcodegen). The app has an app extension,
 # so it is built with xcodebuild rather than Swift Package Manager alone.
@@ -24,6 +29,7 @@ SIGN_IDENTITY=""
 INSTALL=false
 NOTARIZE=false
 KEYCHAIN_PROFILE=""
+NOTES_FILE=""
 
 # Parse optional flags
 [[ $# -gt 0 && "$1" != --* ]] && shift
@@ -41,6 +47,10 @@ while [[ $# -gt 0 ]]; do
         --notarize)
             NOTARIZE=true
             shift
+            ;;
+        --notes)
+            NOTES_FILE="${2:-}"
+            shift 2
             ;;
         --keychain-profile)
             KEYCHAIN_PROFILE="${2:-}"
@@ -129,6 +139,19 @@ if [[ ! -d "$APP_BUNDLE" ]]; then
     echo "Error: could not find built app at $APP_BUNDLE"
     exit 1
 fi
+if [[ "$NOTARIZE" == true ]]; then
+    # Xcode signs Sparkle.framework but not the helpers inside it, which keep Sparkle's ad-hoc
+    # signatures; notarization needs every executable signed with Developer ID and a timestamp.
+    # Inside out, as Sparkle's documentation describes, then the app again to seal the new framework.
+    SPARKLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+    SIGN=(codesign --force --sign "Developer ID Application" --options runtime --timestamp)
+    "${SIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
+    "${SIGN[@]}" --preserve-metadata=entitlements "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
+    "${SIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
+    "${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
+    "${SIGN[@]}" "$SPARKLE"
+    "${SIGN[@]}" --preserve-metadata=entitlements "$APP_BUNDLE"
+fi
 codesign --verify --deep --strict "$APP_BUNDLE"
 
 echo ""
@@ -176,9 +199,47 @@ if [[ "$NOTARIZE" == true ]]; then
     rm -f "$NOTARY_ZIP"
     ditto -c -k --keepParent "$APP_BUNDLE" "$NOTARY_ZIP"
 
+    # --- Appcast for Sparkle ---
+    # Sparkle's sign_update tool, from the release matching the resolved package.
+    SPARKLE_VERSION=$(python3 -c 'import json,sys; print(next(p["state"]["version"] for p in json.load(open(sys.argv[1]))["pins"] if p["identity"] == "sparkle"))' \
+        DisplayAssistant.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved)
+    SPARKLE_TOOLS="$OUTPUT_DIR/sparkle-$SPARKLE_VERSION"
+    if [[ ! -x "$SPARKLE_TOOLS/bin/sign_update" ]]; then
+        echo "Downloading Sparkle $SPARKLE_VERSION tools..."
+        mkdir -p "$SPARKLE_TOOLS"
+        curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" \
+            | tar -xJ -C "$SPARKLE_TOOLS" bin
+    fi
+    # Prints: sparkle:edSignature="..." length="..."
+    SIGNATURE=$("$SPARKLE_TOOLS/bin/sign_update" --account display-assistant "$NOTARY_ZIP")
+    BUILD_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_BUNDLE/Contents/Info.plist")
+    MIN_SYSTEM=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_BUNDLE/Contents/Info.plist")
+    RELEASE_URL="https://github.com/tajshaik24/display-assistant/releases"
+    NOTES=""
+    if [[ -n "$NOTES_FILE" ]]; then NOTES=$(cat "$NOTES_FILE"); fi
+    cat > "$OUTPUT_DIR/appcast.xml" <<APPCAST
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Display Assistant</title>
+    <item>
+      <title>Display Assistant $VERSION</title>
+      <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
+      <sparkle:version>$BUILD_VERSION</sparkle:version>
+      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>$MIN_SYSTEM</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>$RELEASE_URL/tag/v$VERSION</sparkle:fullReleaseNotesLink>
+      <description sparkle:format="markdown"><![CDATA[$NOTES]]></description>
+      <enclosure url="$RELEASE_URL/download/v$VERSION/DisplayAssistant-$VERSION.zip" type="application/octet-stream" $SIGNATURE />
+    </item>
+  </channel>
+</rss>
+APPCAST
+
     echo ""
-    echo "Notarized & stapled. Upload this to the GitHub release:"
+    echo "Notarized & stapled. Attach both to the GitHub release v$VERSION:"
     echo "  $NOTARY_ZIP"
+    echo "  $OUTPUT_DIR/appcast.xml"
     echo ""
 fi
 

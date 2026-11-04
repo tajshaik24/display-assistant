@@ -24,5 +24,13 @@
 	<string>public.app-category.utilities</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/tajshaik24/display-assistant/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>w3V+YhqlqzvkkvsPZPOzK9YABmtlQGY67h/oYJ4Ok5Q=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

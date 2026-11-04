@@ -6,6 +6,9 @@ options:
 packages:
   DisplayKit:
     path: DisplayKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
 settings:
   base:
     DEVELOPMENT_TEAM: LDUCPMFSMH
@@ -23,6 +26,7 @@ targets:
     dependencies:
       - package: DisplayKit
         product: DisplayKit
+      - package: Sparkle
       - target: DisplayAssistantControls
     settings:
       base:
@@ -37,6 +41,12 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.utilities
+        # Sparkle: each release attaches appcast.xml, signed with the EdDSA key in the login keychain
+        # (account "display-assistant"); see build-app.sh.
+        SUFeedURL: https://github.com/tajshaik24/display-assistant/releases/latest/download/appcast.xml
+        SUPublicEDKey: w3V+YhqlqzvkkvsPZPOzK9YABmtlQGY67h/oYJ4Ok5Q=
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 86400
     entitlements:
       path: App/DisplayAssistant.entitlements
       properties:
