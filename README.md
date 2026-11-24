@@ -6,6 +6,8 @@
 
 <p align="center">Brightness and volume for your external monitor, right from the macOS menu bar.</p>
 
+<p align="center"><a href="https://tajshaik24.github.io/display-assistant/"><b>Website</b></a> · <a href="https://github.com/tajshaik24/display-assistant/releases/latest/download/DisplayAssistant.dmg"><b>Download</b></a></p>
+
 Display Assistant controls monitors macOS can't adjust itself over DDC/CI, and keeps them in step
 with your Apple displays:
 
@@ -81,8 +83,9 @@ any display's brightness — from the panel, the keyboard, Control Center, Siri,
 
 ## Install
 
-Download the latest build from [Releases](https://github.com/tajshaik24/display-assistant/releases),
-unzip it and move **Display Assistant.app** to `/Applications`. Requires macOS 26 or later.
+[Download the disk image](https://github.com/tajshaik24/display-assistant/releases/latest/download/DisplayAssistant.dmg)
+(also on the [website](https://tajshaik24.github.io/display-assistant/)), open it and drag
+**Display Assistant** to Applications. Requires macOS 26 or later on Apple Silicon.
 
 Then, on each Mac (permissions don't carry over between machines):
 
@@ -117,6 +120,7 @@ After the first install, grant Accessibility access and add the controls as desc
 | `App/` | The menu bar app |
 | `Controls/` | Control Center extension (sandboxed; forwards commands to the app) |
 | `Shared/` | Command and state definitions used by both |
+| `docs/` | The website, served by GitHub Pages from `main` |
 
 ## Notes
 

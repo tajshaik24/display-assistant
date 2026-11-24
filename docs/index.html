@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Display Assistant</title>
+<meta name="description" content="Brightness and volume for your external monitor, right from the macOS menu bar. Free for Apple Silicon Macs.">
+<meta property="og:title" content="Display Assistant">
+<meta property="og:description" content="Brightness and volume for your external monitor, right from the macOS menu bar.">
+<meta property="og:image" content="https://tajshaik24.github.io/display-assistant/icon.png">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+:root {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --text: #1d1d1f;
+  --secondary: #6e6e73;
+  --hairline: rgba(0, 0, 0, 0.1);
+  --module: rgba(0, 0, 0, 0.05);
+  --lit: rgba(0, 0, 0, 0.78);
+  --unlit: rgba(0, 0, 0, 0.1);
+  --panel: rgba(246, 246, 248, 0.78);
+  --panel-edge: rgba(255, 255, 255, 0.7);
+  --button: #1d1d1f;
+  --button-text: #ffffff;
+  --accent: #0a84ff;
+  --desk-a: #c9ccd3;
+  --desk-b: #8d93a0;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #161617;
+    --text: #f5f5f7;
+    --secondary: #a1a1a6;
+    --hairline: rgba(255, 255, 255, 0.12);
+    --module: rgba(255, 255, 255, 0.06);
+    --lit: #ffffff;
+    --unlit: rgba(255, 255, 255, 0.14);
+    --panel: rgba(40, 40, 44, 0.72);
+    --panel-edge: rgba(255, 255, 255, 0.12);
+    --button: #f5f5f7;
+    --button-text: #1d1d1f;
+    --desk-a: #2a2d35;
+    --desk-b: #0c0d10;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.47 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+a { color: inherit; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+
+/* Nav */
+nav {
+  position: sticky; top: 0; z-index: 10;
+  backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border-bottom: 1px solid var(--hairline);
+}
+nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 48px; }
+nav .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; text-decoration: none; }
+nav .brand img { width: 22px; height: 22px; }
+nav .links { display: flex; gap: 22px; align-items: center; font-size: 13px; }
+nav .links a { text-decoration: none; color: var(--secondary); }
+nav .links a:hover { color: var(--text); }
+nav .links .pill { color: var(--button-text); background: var(--button); padding: 4px 12px; border-radius: 980px; }
+nav .links .pill:hover { color: var(--button-text); opacity: 0.85; }
+@media (max-width: 560px) { nav .links .hide-sm { display: none; } }
+
+/* Hero */
+.hero { text-align: center; padding: 72px 0 0; }
+.hero .icon { width: 112px; height: 112px; filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18)); }
+.hero h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.05; letter-spacing: -0.035em; margin: 20px 0 14px; font-weight: 700; }
+.hero p.lede { font-size: clamp(19px, 2.6vw, 24px); color: var(--secondary); max-width: 640px; margin: 0 auto; line-height: 1.35; }
+.cta { margin: 32px 0 10px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.button {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 500; text-decoration: none;
+  padding: 12px 24px; border-radius: 980px;
+  background: var(--button); color: var(--button-text);
+  transition: opacity .15s;
+}
+.button:hover { opacity: 0.85; }
+.button.secondary { background: transparent; color: var(--accent); padding-left: 8px; padding-right: 8px; }
+.button svg { width: 18px; height: 18px; }
+.meta { font-size: 13px; color: var(--secondary); }
+
+/* Desktop scene with the panel */
+.scene {
+  position: relative; margin: 56px auto 0; max-width: 980px; height: 520px;
+  border-radius: 22px; overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 85% 0%, var(--desk-a), transparent 60%),
+    radial-gradient(100% 80% at 0% 100%, var(--desk-b), transparent 70%),
+    linear-gradient(160deg, var(--desk-a), var(--desk-b));
+  border: 1px solid var(--hairline);
+}
+.menubar {
+  height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 18px;
+  padding: 0 16px; font-size: 13px; font-weight: 500; color: #fff;
+  background: rgba(0,0,0,0.16); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.menubar .left { margin-right: auto; display: flex; gap: 20px; }
+.menubar .left b { font-weight: 700; }
+.menubar svg { width: 16px; height: 16px; display: block; }
+.menubar .active { background: rgba(255,255,255,0.22); border-radius: 5px; padding: 3px 6px; margin: 0 -6px; }
+.panel {
+  position: absolute; top: 38px; right: 48px; width: 320px; padding: 6px;
+  border-radius: 20px; background: var(--panel);
+  backdrop-filter: blur(40px) saturate(160%); -webkit-backdrop-filter: blur(40px) saturate(160%);
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.2), inset 0 0 0 1px var(--panel-edge), 0 20px 50px rgba(0,0,0,0.3);
+  text-align: left; color: var(--text); font-size: 13px; letter-spacing: 0;
+  user-select: none; -webkit-user-select: none;
+}
+.panel .head { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 10px 2px; }
+.panel .head b { font-size: 13px; }
+.panel .sub, .panel .val { font-size: 11px; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.panel .stack { display: flex; flex-direction: column; gap: 6px; }
+.module { background: var(--module); border-radius: 16px; padding: 10px 12px 11px; }
+.module .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.module .top b { font-size: 12px; font-weight: 600; }
+.slider { display: flex; align-items: center; gap: 12px; height: 22px; color: var(--lit); }
+.slider .glyph { width: 22px; display: flex; justify-content: center; cursor: pointer; opacity: 0.8; }
+.slider .glyph svg { width: 18px; height: 18px; }
+.track { flex: 1; height: 22px; display: flex; align-items: center; gap: 2px; cursor: pointer; touch-action: none; }
+.seg { flex: 1; height: 5px; border-radius: 2px; background: var(--unlit); position: relative; overflow: hidden; transition: height .15s; }
+.track:hover .seg, .track.dragging .seg { height: 7px; }
+.seg i { position: absolute; inset: 0 auto 0 0; background: var(--lit); opacity: 0.8; }
+.toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer; }
+.toggle .dot {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  font-size: 8.5px; font-weight: 800; transition: background .15s, color .15s;
+}
+.toggle.on .dot { background: var(--accent); color: #fff; }
+.toggle .dot svg { width: 13px; height: 13px; }
+.toggle .t { font-size: 12px; font-weight: 500; line-height: 1.2; }
+.toggle .s { font-size: 11px; color: var(--secondary); }
+.panel .divider { height: 1px; background: var(--hairline); margin: 8px 10px 5px; }
+.panel .section { font-size: 11px; font-weight: 600; color: var(--secondary); padding: 0 10px; }
+.panel .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px; min-height: 24px; border-radius: 7px; }
+.panel .row.item:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.switch { width: 26px; height: 15px; border-radius: 8px; background: var(--accent); position: relative; }
+.switch::after { content: ""; position: absolute; top: 1.5px; right: 1.5px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.hud {
+  position: absolute; top: 46px; right: 400px; width: 210px; padding: 14px 16px; border-radius: 18px;
+  background: rgba(30,30,34,0.42); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
+  display: flex; align-items: center; gap: 14px; opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s;
+}
+.hud.show { opacity: 1; transform: none; }
+.hud svg { width: 24px; height: 24px; flex: none; }
+.hud .track { height: 4px; gap: 2px; cursor: default; }
+.hud .seg { height: 4px; background: rgba(255,255,255,0.3); }
+.hud .seg i { background: #fff; opacity: 1; }
+.scene .hint { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font-size: 13px; color: rgba(255,255,255,0.85); }
+.scene .hint kbd { font: 12px/1 -apple-system, sans-serif; background: rgba(255,255,255,0.18); border-radius: 5px; padding: 3px 6px; }
+@media (max-width: 760px) {
+  .scene { height: 500px; border-radius: 0; margin-left: -22px; margin-right: -22px; border-left: 0; border-right: 0; }
+  .panel { left: 50%; right: auto; transform: translateX(-50%); width: min(320px, calc(100% - 24px)); }
+  .hud, .menubar .left span:not(:first-child), .scene .hint { display: none; }
+}
+
+/* Sections */
+section { padding: 110px 0 0; }
+.eyebrow { font-size: 17px; font-weight: 600; color: var(--secondary); margin: 0 0 8px; }
+h2 { font-size: clamp(32px, 5vw, 48px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 16px; font-weight: 700; }
+.intro { font-size: 21px; color: var(--secondary); max-width: 680px; margin: 0 0 44px; line-height: 1.4; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.card { background: var(--surface); border-radius: 20px; padding: 28px; border: 1px solid var(--hairline); }
+.card .ic { width: 40px; height: 40px; border-radius: 10px; background: var(--module); display: grid; place-items: center; margin-bottom: 18px; }
+.card .ic svg { width: 22px; height: 22px; }
+.card h3 { font-size: 19px; margin: 0 0 6px; letter-spacing: -0.02em; }
+.card p { margin: 0; color: var(--secondary); font-size: 15px; }
+.card code, td code, .steps code { font: 13px ui-monospace, "SF Mono", Menlo, monospace; background: var(--module); padding: 1px 5px; border-radius: 5px; color: var(--text); }
+
+.keys { background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 16px 24px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 13px; font-weight: 600; color: var(--secondary); }
+td:last-child { color: var(--secondary); }
+kbd.key {
+  display: inline-block; min-width: 30px; text-align: center; font: 600 12px/1 -apple-system, sans-serif;
+  padding: 6px 7px; border-radius: 6px; background: var(--bg); border: 1px solid var(--hairline);
+  box-shadow: 0 1px 0 var(--hairline); margin-right: 4px;
+}
+@media (max-width: 560px) { th, td { padding: 14px 16px; } th:nth-child(2), td:nth-child(2) { display: none; } }
+
+.terminal { background: #1d1d1f; color: #f5f5f7; border-radius: 16px; padding: 22px 24px; font: 14px/1.7 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; margin-top: 20px; }
+.terminal .p { color: #8e8e93; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.steps li { counter-increment: step; display: flex; gap: 16px; align-items: flex-start; background: var(--surface); border: 1px solid var(--hairline); border-radius: 16px; padding: 18px 20px; }
+.steps li::before { content: counter(step); flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--button); color: var(--button-text); display: grid; place-items: center; font-size: 14px; font-weight: 600; }
+.steps li p { margin: 2px 0 0; color: var(--secondary); font-size: 15px; }
+
+.download { text-align: center; padding-bottom: 30px; }
+.download .icon { width: 96px; height: 96px; }
+.req { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-top: 22px; font-size: 14px; color: var(--secondary); }
+
+footer { border-top: 1px solid var(--hairline); margin-top: 100px; padding: 26px 0 40px; font-size: 12px; color: var(--secondary); }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+footer a { color: var(--secondary); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="sun-min" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/><g fill="currentColor"><circle cx="12" cy="4.5" r="1.1"/><circle cx="12" cy="19.5" r="1.1"/><circle cx="4.5" cy="12" r="1.1"/><circle cx="19.5" cy="12" r="1.1"/><circle cx="6.7" cy="6.7" r="1.1"/><circle cx="17.3" cy="17.3" r="1.1"/><circle cx="6.7" cy="17.3" r="1.1"/><circle cx="17.3" cy="6.7" r="1.1"/></g></symbol>
+    <symbol id="sun-max" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.8v2.6M12 19.6v2.6M1.8 12h2.6M19.6 12h2.6M4.8 4.8l1.8 1.8M17.4 17.4l1.8 1.8M4.8 19.2l1.8-1.8M17.4 6.6l1.8-1.8"/></g></symbol>
+    <symbol id="spk" viewBox="0 0 24 24"><path fill="currentColor" d="M3 9.2h3.6L11.4 5c.7-.6 1.6-.1 1.6.8v12.4c0 .9-.9 1.4-1.6.8L6.6 14.8H3c-.6 0-1-.4-1-1V10.2c0-.6.4-1 1-1z"/></symbol>
+    <symbol id="wave1" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M15.6 9.2a4 4 0 0 1 0 5.6"/></symbol>
+    <symbol id="wave2" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M18.2 6.8a7.4 7.4 0 0 1 0 10.4"/></symbol>
+    <symbol id="wave3" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" d="M20.7 4.4a10.8 10.8 0 0 1 0 15.2"/></symbol>
+    <symbol id="slash" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3 3l18 18"/></symbol>
+    <symbol id="monitor" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 20.5h6M12 16.5v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="link" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M10 14a4.2 4.2 0 0 0 6 0l3-3a4.2 4.2 0 0 0-6-6l-1 1M14 10a4.2 4.2 0 0 0-6 0l-3 3a4.2 4.2 0 0 0 6 6l1-1"/></symbol>
+    <symbol id="download" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5v11.5M7 10.5l5 5 5-5M4.5 19.5h15"/></symbol>
+  </defs>
+</svg>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">Display Assistant</a>
+    <div class="links">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#keyboard">Keyboard</a>
+      <a class="hide-sm" href="https://github.com/tajshaik24/display-assistant">GitHub</a>
+      <a class="pill dl-link" href="https://github.com/tajshaik24/display-assistant/releases/latest/download/DisplayAssistant.dmg">Download</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="icon" src="icon.png" alt="Display Assistant icon">
+    <h1>Your monitor,<br>finally in the menu bar.</h1>
+    <p class="lede">Brightness and volume for external displays, right where your Mac's own controls live. Your keys work, and the monitor keeps pace with your MacBook.</p>
+    <div class="cta">
+      <a class="button dl-link" href="https://github.com/tajshaik24/display-assistant/releases/latest/download/DisplayAssistant.dmg">
+        <svg><use href="#download"/></svg>Download for Mac
+      </a>
+      <a class="button secondary" href="#features">Learn more ›</a>
+    </div>
+    <div class="meta"><span class="version">Free</span> · macOS 26 or later · Apple Silicon</div>
+  </div>
+
+  <div class="wrap">
+    <div class="scene" aria-label="Interactive preview of the Display Assistant panel">
+      <div class="menubar">
+        <div class="left"><span><b>Finder</b></span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span></div>
+        <span class="active"><svg><use href="#monitor"/></svg></span>
+        <span>Mon 9:41 AM</span>
+      </div>
+
+      <div class="hud" id="hud" aria-hidden="true">
+        <svg id="hud-icon"><use href="#sun-max"/></svg>
+        <div class="track" id="hud-track"></div>
+      </div>
+
+      <div class="panel">
+        <div class="head"><b>LG UltraGear</b><span class="sub">5K · 165 Hz</span></div>
+        <div class="stack">
+          <div class="module">
+            <div class="top"><b>Display</b><span class="val" id="b-val">62%</span></div>
+            <div class="slider">
+              <span class="glyph"><svg id="b-icon"><use href="#sun-max"/></svg></span>
+              <div class="track" id="b-track" role="slider" aria-label="Brightness" tabindex="0"></div>
+            </div>
+            <div class="toggle" id="hdr" role="switch" aria-checked="false" tabindex="0">
+              <span class="dot">HDR</span>
+              <span><div class="t">High Dynamic Range</div><div class="s">Off</div></span>
+            </div>
+          </div>
+          <div class="module">
+            <div class="top"><b>Sound</b><span class="val" id="v-val">40%</span></div>
+            <div class="slider">
+              <span class="glyph" id="mute" title="Mute"><svg id="v-icon" viewBox="0 0 24 24"></svg></span>
+              <div class="track" id="v-track" role="slider" aria-label="Volume" tabindex="0"></div>
+            </div>
+          </div>
+        </div>
+        <div class="toggle on" id="sync" style="padding: 0 10px" role="switch" aria-checked="true" tabindex="0">
+          <span class="dot"><svg><use href="#link"/></svg></span>
+          <span><div class="t">Sync Brightness</div><div class="s">On</div></span>
+        </div>
+        <div class="divider"></div>
+        <div class="section">Settings</div>
+        <div class="row"><span>Launch at Login</span><span class="switch"></span></div>
+        <div class="divider"></div>
+        <div class="row item">Displays Settings…</div>
+        <div class="row item">Check for Updates…</div>
+        <div class="row item"><span>Quit Display Assistant</span><span class="val">⌘Q</span></div>
+      </div>
+
+      <div class="hint">Drag the sliders, or press <kbd>←</kbd> <kbd>→</kbd> on a focused slider</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="features">
+    <p class="eyebrow">Features</p>
+    <h2>Feels like Apple built it.</h2>
+    <p class="intro">Display Assistant talks to your monitor over DDC/CI, the same channel its on-screen menu uses, and wraps it in controls that look and behave like the rest of macOS.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="ic"><svg><use href="#sun-max"/></svg></div>
+        <h3>Menu bar panel</h3>
+        <p>Display and Sound sliders for every monitor, with the segmented track of the macOS volume indicator, a mute button and an HDR toggle.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg><use href="#link"/></svg></div>
+        <h3>Sync Brightness</h3>
+        <p>All displays move together, so your monitor follows your MacBook's auto-brightness and brightness keys.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 10h1.5M9.5 10H11M13 10h1.5M16.5 10H18M8 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <h3>Your keyboard's keys</h3>
+        <p>Brightness, mute and volume keys act on the display under the pointer, with the same on-screen indicator macOS shows.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="3" width="8" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="13" width="18" height="8" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <h3>Control Center</h3>
+        <p>Add controls that open the sliders, jump to a brightness or volume you choose, or mute the display's speakers.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 9.3l-4.4 3.9 1.3 5.8L12 16l-4.9 3 1.3-5.8L4 9.3l5.8-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <h3>Shortcuts, Siri &amp; Spotlight</h3>
+        <p>Set or read brightness and volume, mute, and switch HDR — for example, from an automation when a movie app opens.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 10l3 2.5L7 15M12.5 15H17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3>A command-line tool</h3>
+        <p><code>displayctl</code> handles brightness, volume, mute and HDR from your scripts. Build it from the source on GitHub.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="keyboard">
+    <p class="eyebrow">Keyboard</p>
+    <h2>The keys you already reach for.</h2>
+    <p class="intro">Brightness keys follow the pointer to the right screen. Volume keys take over only while a display is your sound output — headphones and speakers work as usual.</p>
+    <div class="keys">
+      <table>
+        <thead><tr><th>Key</th><th>Apple keyboard</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>Brightness down / up</td><td><kbd class="key">F1</kbd><kbd class="key">F2</kbd></td><td>Dims or brightens the display under the pointer by one step</td></tr>
+          <tr><td>Mute</td><td><kbd class="key">F10</kbd></td><td>Mutes or unmutes the display's speakers</td></tr>
+          <tr><td>Volume down / up</td><td><kbd class="key">F11</kbd><kbd class="key">F12</kbd></td><td>Changes the display's volume by one step</td></tr>
+          <tr><td>Fine step</td><td><kbd class="key">⌥</kbd><kbd class="key">⇧</kbd> + key</td><td>Moves a quarter step at a time, just like macOS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <p class="eyebrow">Works with your setup</p>
+        <h2>Every display, the right way.</h2>
+        <p class="intro" style="margin-bottom:0">Monitors macOS can't adjust get full control over DDC/CI. The built-in display, Studio Display, Pro Display XDR and LG UltraFine show up with a brightness slider while their keys and volume stay native. With HDR on, brightness goes through macOS so the slider and keys keep working.</p>
+      </div>
+      <div>
+        <p class="eyebrow">For scripts</p>
+        <div class="terminal">
+          <div><span class="p">$</span> displayctl get brightness</div>
+          <div class="p">62/100</div>
+          <div><span class="p">$</span> displayctl set brightness 30</div>
+          <div><span class="p">$</span> displayctl set volume 45</div>
+          <div><span class="p">$</span> displayctl set mute 1</div>
+          <div><span class="p">$</span> displayctl hdr on</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <p class="eyebrow">Get started</p>
+    <h2>Up and running in a minute.</h2>
+    <p class="intro">Signed and notarized by Apple. Updates arrive on their own.</p>
+    <ol class="steps">
+      <li><div><strong>Download and open the disk image</strong><p>Drag Display Assistant into your Applications folder, then open it.</p></div></li>
+      <li><div><strong>Enable keyboard control</strong><p>Click the display icon in the menu bar and press <strong>Enable</strong> to allow Accessibility access for the brightness and volume keys.</p></div></li>
+      <li><div><strong>Optional: add Control Center controls</strong><p>Open Control Center, choose <strong>Edit Controls</strong> and search for “Display”.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="download" id="download">
+    <img class="icon" src="icon.png" alt="">
+    <h2 style="margin-top:18px">Take control of your display.</h2>
+    <div class="cta">
+      <a class="button dl-link" href="https://github.com/tajshaik24/display-assistant/releases/latest/download/DisplayAssistant.dmg">
+        <svg><use href="#download"/></svg>Download for Mac
+      </a>
+    </div>
+    <div class="req">
+      <span>macOS 26 or later</span>
+      <span>Apple Silicon</span>
+      <span>Monitor with DDC/CI over USB-C, DisplayPort or HDMI</span>
+    </div>
+    <p class="meta" style="margin-top:18px">Some docks, adapters and DisplayLink devices don't pass DDC through. DDC/CI must be on in the monitor's own menu.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Display Assistant by Taj Shaik</span>
+    <span><a href="https://github.com/tajshaik24/display-assistant">Source on GitHub</a> · <a href="https://github.com/tajshaik24/display-assistant/releases">Release notes</a></span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const SEGMENTS = 16;
+  const state = { brightness: 0.62, volume: 0.4, muted: false };
+  const hud = document.getElementById('hud');
+  const hudTrack = document.getElementById('hud-track');
+  let hudTimer;
+
+  function buildTrack(el) {
+    el.innerHTML = '';
+    for (let i = 0; i < SEGMENTS; i++) {
+      const s = document.createElement('div');
+      s.className = 'seg';
+      s.appendChild(document.createElement('i'));
+      el.appendChild(s);
+    }
+  }
+  function paintTrack(el, value) {
+    [...el.children].forEach((seg, i) => {
+      const fill = Math.min(Math.max(value * SEGMENTS - i, 0), 1);
+      seg.firstChild.style.width = (fill * 100) + '%';
+    });
+  }
+  function volumeIcon(v, muted) {
+    let uses = '<use href="#spk"/>';
+    if (muted) return uses + '<use href="#slash"/>';
+    if (v >= 0.01) uses += '<use href="#wave1"/>';
+    if (v >= 1 / 3) uses += '<use href="#wave2"/>';
+    if (v >= 2 / 3) uses += '<use href="#wave3"/>';
+    return uses;
+  }
+  function showHud(kind, value) {
+    document.getElementById('hud-icon').innerHTML = kind === 'brightness'
+      ? `<use href="#${value < 0.5 ? 'sun-min' : 'sun-max'}"/>`
+      : volumeIcon(value, state.muted);
+    document.getElementById('hud-icon').setAttribute('viewBox', '0 0 24 24');
+    paintTrack(hudTrack, value);
+    hud.classList.add('show');
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => hud.classList.remove('show'), 1200);
+  }
+  function render() {
+    const b = state.brightness, v = state.muted ? 0 : state.volume;
+    paintTrack(document.getElementById('b-track'), b);
+    paintTrack(document.getElementById('v-track'), v);
+    document.getElementById('b-val').textContent = Math.round(b * 100) + '%';
+    document.getElementById('v-val').textContent = state.muted ? 'Muted' : Math.round(state.volume * 100) + '%';
+    document.getElementById('b-icon').innerHTML = `<use href="#${b < 0.5 ? 'sun-min' : 'sun-max'}"/>`;
+    document.getElementById('b-icon').setAttribute('viewBox', '0 0 24 24');
+    document.getElementById('v-icon').innerHTML = volumeIcon(state.volume, state.muted);
+  }
+  function bindTrack(id, key) {
+    const el = document.getElementById(id);
+    buildTrack(el);
+    const set = (value) => {
+      state[key] = Math.min(Math.max(value, 0), 1);
+      if (key === 'volume') state.muted = false;
+      render();
+      showHud(key, state[key]);
+    };
+    const fromEvent = (e) => {
+      const r = el.getBoundingClientRect();
+      set((e.clientX - r.left) / r.width);
+    };
+    el.addEventListener('pointerdown', (e) => {
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('dragging');
+      fromEvent(e);
+    });
+    el.addEventListener('pointermove', (e) => { if (el.hasPointerCapture(e.pointerId)) fromEvent(e); });
+    el.addEventListener('pointerup', () => el.classList.remove('dragging'));
+    el.addEventListener('keydown', (e) => {
+      const step = e.altKey && e.shiftKey ? 1 / 64 : 1 / 16;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { set(state[key] + step); e.preventDefault(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { set(state[key] - step); e.preventDefault(); }
+    });
+  }
+  function bindToggle(id, onChange) {
+    const el = document.getElementById(id);
+    const flip = () => {
+      const on = !el.classList.contains('on');
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-checked', on);
+      el.querySelector('.s').textContent = on ? 'On' : 'Off';
+      onChange && onChange(on);
+    };
+    el.addEventListener('click', flip);
+    el.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { flip(); e.preventDefault(); } });
+  }
+
+  buildTrack(hudTrack);
+  bindTrack('b-track', 'brightness');
+  bindTrack('v-track', 'volume');
+  bindToggle('hdr');
+  bindToggle('sync');
+  document.getElementById('mute').addEventListener('click', () => {
+    state.muted = !state.muted;
+    render();
+    showHud('volume', state.muted ? 0 : state.volume);
+  });
+  render();
+
+  // Show the current version next to the download button.
+  fetch('https://api.github.com/repos/tajshaik24/display-assistant/releases/latest')
+    .then((r) => r.ok ? r.json() : null)
+    .then((release) => {
+      if (!release || !release.tag_name) return;
+      document.querySelectorAll('.version').forEach((el) => {
+        el.textContent = 'Version ' + release.tag_name.replace(/^v/, '') + ' · Free';
+      });
+    })
+    .catch(() => {});
+})();
+</script>
+</body>
+</html>

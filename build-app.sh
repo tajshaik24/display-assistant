@@ -19,8 +19,10 @@ set -euo pipefail
 # Updates (Sparkle): a notarized build also writes build/appcast.xml, with the zip signed by the
 # Sparkle EdDSA key in the login keychain (account "display-assistant"; public key in project.yml).
 # --notes FILE puts that Markdown file in the appcast as the release notes Sparkle shows.
-# Attach both build/DisplayAssistant-<version>.zip and build/appcast.xml to the GitHub release;
-# the app reads the appcast from the latest release.
+# It also writes build/DisplayAssistant.dmg (signed, notarized and stapled) for the website's download
+# button, which links to releases/latest/download/DisplayAssistant.dmg, so the name never changes.
+# Attach the zip, appcast.xml and the dmg to the GitHub release; the app reads the appcast from the
+# latest release.
 #
 # Requires Xcode and XcodeGen (brew install xcodegen). The app has an app extension,
 # so it is built with xcodebuild rather than Swift Package Manager alone.
@@ -243,10 +245,16 @@ if [[ "$NOTARIZE" == true ]]; then
 </rss>
 APPCAST
 
+    # --- Disk image for the website ---
+    DMG_ARGS=(--notarize)
+    [[ -n "$KEYCHAIN_PROFILE" ]] && DMG_ARGS+=(--keychain-profile "$KEYCHAIN_PROFILE")
+    "$SCRIPT_DIR/scripts/make-dmg.sh" "$APP_BUNDLE" "$OUTPUT_DIR/DisplayAssistant.dmg" "${DMG_ARGS[@]}"
+
     echo ""
-    echo "Notarized & stapled. Attach both to the GitHub release v$VERSION:"
+    echo "Notarized & stapled. Attach all three to the GitHub release v$VERSION:"
     echo "  $NOTARY_ZIP"
     echo "  $OUTPUT_DIR/appcast.xml"
+    echo "  $OUTPUT_DIR/DisplayAssistant.dmg"
     echo ""
 fi
 
